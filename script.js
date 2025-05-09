@@ -156,6 +156,7 @@ async function processHighlightQueue(originalText, queue) {
     else if (item.type === 'hard') highlightClass = 'highlight-danger';
 
     await highlightWithSmoothEffect(originalText, item.sentence, highlightClass);
+    showLegendIfHidden();
     await sleep(200);
   }
 
@@ -344,5 +345,11 @@ function showFixMyMailButton() {
     fixButton.onclick = function () {
       window.location.href = 'fix.html';
     };
+  }
+}
+function showLegendIfHidden() {
+  const legend = document.getElementById('legend');
+  if (legend && !legend.classList.contains('visible')) {
+    legend.classList.add('visible');
   }
 }
