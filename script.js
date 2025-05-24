@@ -102,19 +102,21 @@ function moveCursorToEnd() {
 function initializeOverlayContainer() {
   let overlayContainer = document.getElementById('highlight-overlay-container');
   if (overlayContainer) {
-    document.body.removeChild(overlayContainer);
+    overlayContainer.remove();
   }
 
   overlayContainer = document.createElement('div');
   overlayContainer.id = 'highlight-overlay-container';
   overlayContainer.style.position = 'absolute';
-  overlayContainer.style.top = inputArea.getBoundingClientRect().top + window.scrollY + 'px';
-  overlayContainer.style.left = inputArea.getBoundingClientRect().left + window.scrollX + 'px';
-  overlayContainer.style.width = inputArea.offsetWidth + 'px';
-  overlayContainer.style.height = inputArea.offsetHeight + 'px';
+  overlayContainer.style.top = '0';
+  overlayContainer.style.left = '0';
+  overlayContainer.style.width = '100%';
+  overlayContainer.style.height = '100%';
   overlayContainer.style.pointerEvents = 'none';
   overlayContainer.style.zIndex = '0';
-  document.body.appendChild(overlayContainer);
+  
+  // Insert the overlay container as the first child of inputArea
+  inputArea.insertBefore(overlayContainer, inputArea.firstChild);
 
   console.log('✅ Overlay container initialized', overlayContainer);
 }
@@ -275,20 +277,26 @@ function createSentenceHighlight(text, highlightClass) {
     wrapper.style.position = 'absolute';
     wrapper.style.pointerEvents = 'none';
     wrapper.style.zIndex = '0';
+    wrapper.dataset.text = text;
     overlayContainer.appendChild(wrapper);
 
     for (let i = 0; i < rects.length; i++) {
       const rect = rects[i];
+      
+      // Calculate position relative to inputArea, not viewport
+      const inputRect = inputArea.getBoundingClientRect();
+      const relativeTop = rect.top - inputRect.top + inputArea.scrollTop;
+      const relativeLeft = rect.left - inputRect.left + inputArea.scrollLeft;
+      
       const highlight = document.createElement('div');
       highlight.className = `highlight ${highlightClass}`;
       highlight.style.position = 'absolute';
-      highlight.style.top = `${rect.top + window.scrollY - inputArea.getBoundingClientRect().top}px`;
-      highlight.style.left = `${rect.left + window.scrollX - inputArea.getBoundingClientRect().left}px`;
+      highlight.style.top = `${relativeTop}px`;
+      highlight.style.left = `${relativeLeft}px`;
       highlight.style.width = '0px';
       highlight.style.height = `${rect.height}px`;
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
-      highlight.style.opacity = '0.5';
       highlight.style.zIndex = '0';
       highlight.dataset.fullWidth = rect.width;
 
