@@ -17,10 +17,67 @@ window.addEventListener('resize', () => {
   initializeOverlayContainer();
 });
 
-inputArea.addEventListener('input', () => {
-  console.log('✍️ User typed or pasted something...');
+// Handle paste events to strip formatting
+inputArea.addEventListener('paste', (e) => {
+  e.preventDefault(); // Prevent default paste behavior
+  
+  // Get plain text from clipboard
+  const paste = (e.clipboardData || window.clipboardData).getData('text/plain');
+  
+  // Insert plain text at cursor position
+  insertTextAtCursor(paste);
+  
+  console.log('📋 Pasted plain text (formatting stripped)');
+  
+  // Trigger the analysis after paste
   clearTimeout(timeout);
+  clearAllHighlights();
+  highlightedSentences.clear();
+  
+  const fixButton = document.getElementById('fixMyMailButton');
+  if (fixButton) {
+    fixButton.style.display = 'none';
+  }
+  
+  timeout = setTimeout(sendMessage, 1000);
+});
 
+// Function to insert text at cursor position
+function insertTextAtCursor(text) {
+  const selection = window.getSelection();
+  
+  if (selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    
+    // Create a text node with the plain text
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    
+    // Move cursor to end of inserted text
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    // If no selection, append to end
+    inputArea.appendChild(document.createTextNode(text));
+  }
+}
+
+// Handle keyboard input to also strip formatting
+inputArea.addEventListener('input', (e) => {
+  console.log('✍️ User typed or pasted something...');
+  
+  // Strip any HTML tags that might have been inserted
+  const currentText = inputArea.innerText;
+  if (inputArea.innerHTML !== currentText) {
+    inputArea.textContent = currentText;
+    // Move cursor to end
+    moveCursorToEnd();
+  }
+  
+  clearTimeout(timeout);
   clearAllHighlights();
   highlightedSentences.clear();
 
@@ -31,6 +88,16 @@ inputArea.addEventListener('input', () => {
 
   timeout = setTimeout(sendMessage, 1000);
 });
+
+// Function to move cursor to end
+function moveCursorToEnd() {
+  const range = document.createRange();
+  const selection = window.getSelection();
+  range.selectNodeContents(inputArea);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
 
 function initializeOverlayContainer() {
   let overlayContainer = document.getElementById('highlight-overlay-container');
@@ -347,6 +414,7 @@ function showFixMyMailButton() {
     };
   }
 }
+
 function showLegendIfHidden() {
   const legend = document.getElementById('legend');
   if (legend && !legend.classList.contains('visible')) {
