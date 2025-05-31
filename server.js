@@ -3,9 +3,22 @@ require('dotenv').config();
 const express = require('express'); 
 const cors = require('cors');       
 const axios = require('axios');     
+const fs = require('fs');           // Add this to read files
+const path = require('path');       // Add this for file paths
 
 // Initialize the express app
 const app = express();
+
+// Function to read the prompt from file
+function loadPrompt() {
+  try {
+    const promptPath = path.join(__dirname, 'SystemPrompt_GM.txt');
+    return fs.readFileSync(promptPath, 'utf-8');
+  } catch (error) {
+    console.error('❌ Error reading prompt file:', error.message);
+    throw new Error('Could not load prompt file');
+  }
+}
 
 // Proper CORS setup
 app.use(cors({
@@ -22,41 +35,25 @@ app.post('/api/analyze', async (req, res) => {
 
   console.log("✅ Received input from frontend.");
 
-  const payload = {
-    model: 'mistralai/mistral-7b-instruct',
-    messages: [
-      {
-        role: 'system',
-        content: `You are an expert newsletter readability evaluator.
-
-Carefully review the following text sentence by sentence.
-
-For each sentence:
-- If it is very simple and short, wrap it with <Fluff> ... </Fluff>
-- If it is moderately complex, wrap it with <Spam_words> ... </Spam_words>
-- If it is very long, complicated, or hard to follow, wrap it with <Hard_to_read> ... </Hard_to_read>
-
-**Important:**
-- Every sentence must be categorized — no skipping allowed.
-- Do not use any special formatting like curly braces or slashes.
-- Only use the tags exactly as shown.
-
-**Format Strictly Like This:**
-<Fluff> Sentence </Fluff>
-<Spam_words> Sentence </Spam_words>
-<Hard_to_read> Sentence </Hard_to_read>
-
-Now, here's the text:
-[USER_INPUT_TEXT]`
-      },
-      {
-        role: 'user',
-        content: userMessage
-      }
-    ]
-  };
-
   try {
+    // Load the prompt from the external file
+    const systemPrompt = loadPrompt();
+    
+    const payload = {
+      model: 'meta-llama/llama-3-8b-instruct',
+      messages: [
+        {
+          role: 'system',
+          content: `${systemPrompt}
+${userMessage}`
+        },
+        {
+          role: 'user',
+          content: userMessage
+        }
+      ]
+    };
+
     console.log("⏳ Sending request to OpenRouter...");
     
     const response = await axios.post(
