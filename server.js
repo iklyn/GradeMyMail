@@ -3,20 +3,31 @@ require('dotenv').config();
 const express = require('express'); 
 const cors = require('cors');       
 const axios = require('axios');     
-const fs = require('fs');           // Add this to read files
-const path = require('path');       // Add this for file paths
+const fs = require('fs');           
+const path = require('path');       
 
 // Initialize the express app
 const app = express();
 
-// Function to read the prompt from file
-function loadPrompt() {
+// Function to read the GradeMyMail prompt from file
+function loadGradePrompt() {
   try {
     const promptPath = path.join(__dirname, 'SystemPrompt_GM.txt');
     return fs.readFileSync(promptPath, 'utf-8');
   } catch (error) {
-    console.error('❌ Error reading prompt file:', error.message);
-    throw new Error('Could not load prompt file');
+    console.error('❌ Error reading GradeMyMail prompt file:', error.message);
+    throw new Error('Could not load GradeMyMail prompt file');
+  }
+}
+
+// Function to read the FixMyMail prompt from file
+function loadFixPrompt() {
+  try {
+    const promptPath = path.join(__dirname, 'SystemPrompt_FM.txt');
+    return fs.readFileSync(promptPath, 'utf-8');
+  } catch (error) {
+    console.error('❌ Error reading FixMyMail prompt file:', error.message);
+    throw new Error('Could not load FixMyMail prompt file');
   }
 }
 
@@ -29,15 +40,15 @@ app.use(cors({
 
 app.use(express.json());
 
-// POST endpoint for analyzing newsletter
+// POST endpoint for analyzing newsletter (GradeMyMail)
 app.post('/api/analyze', async (req, res) => {
   const userMessage = req.body.message;
 
-  console.log("✅ Received input from frontend.");
+  console.log("✅ Received input from frontend for analysis.");
 
   try {
-    // Load the prompt from the external file
-    const systemPrompt = loadPrompt();
+    // Load the GradeMyMail prompt from the external file
+    const systemPrompt = loadGradePrompt();
     
     const payload = {
       model: 'meta-llama/llama-3-8b-instruct',
@@ -54,7 +65,7 @@ ${userMessage}`
       ]
     };
 
-    console.log("⏳ Sending request to OpenRouter...");
+    console.log("⏳ Sending request to OpenRouter for analysis...");
     
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -70,7 +81,7 @@ ${userMessage}`
       }
     );
 
-    console.log("✅ AI server responded. Starting to stream...");
+    console.log("✅ AI server responded for analysis. Starting to stream...");
 
     // Set appropriate content type for streaming
     res.setHeader('Content-Type', 'application/json');
@@ -79,7 +90,61 @@ ${userMessage}`
     response.data.pipe(res);
 
   } catch (error) {
-    console.error('❌ Error talking to AI:', error.response?.data || error.message);
+    console.error('❌ Error talking to AI for analysis:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+// POST endpoint for fixing newsletter (FixMyMail)
+app.post('/api/fix', async (req, res) => {
+  const userMessage = req.body.message;
+
+  console.log("✅ Received input from frontend for fixing.");
+
+  try {
+    // Load the FixMyMail prompt from the external file
+    const systemPrompt = loadFixPrompt();
+    
+    const payload = {
+      model: 'meta-llama/llama-3-8b-instruct',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userMessage
+        }
+      ]
+    };
+
+    console.log("⏳ Sending request to OpenRouter for fixing...");
+    
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+          'X-Title': 'FixMyMail'
+        },
+        responseType: 'stream'
+      }
+    );
+
+    console.log("✅ AI server responded for fixing. Starting to stream...");
+
+    // Set appropriate content type for streaming
+    res.setHeader('Content-Type', 'text/plain');
+    
+    // Pipe the response directly to the frontend
+    response.data.pipe(res);
+
+  } catch (error) {
+    console.error('❌ Error talking to AI for fixing:', error.response?.data || error.message);
     res.status(500).json({ error: 'Internal server error. Please try again.' });
   }
 });
