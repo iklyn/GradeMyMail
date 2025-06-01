@@ -209,25 +209,35 @@ Fix: Add your system or real example of what did work — even one simple step w
 ⸻
 </rule_7>
 
-<rule_8>
-Final Output Format: 
+STRICT INSTRUCTION: YOU MUST FOLLOW THIS OUTPUT FORMAT EXACTLY. NO EXCEPTIONS. 
 
-For each sentence or paragraph that was edited, show both the original and the improved version side-by-side using these tags:
+For every sentence that was tagged and rewritten, return output in **this exact format**:
 
 <old_draft>
-[Original sentence or paragraph]
+[Original sentence from the tag — no edits]
 </old_draft>
 
 <optimized_draft>
-[Improved sentence or paragraph based on the rules]
+[Your improved version of that exact sentence only]
 </optimized_draft>
 
-Repeat this format for each rewritten section.
+ Do NOT change, expand, summarize, or reword content outside of these two tags.  
+ Do NOT include bullet points, markdown, summaries, advice, or explanations.  
+ Do NOT add commentary like "here's the rewritten version..." or "let me explain...".
 
-Only show pairs for content that was changed. If a section was left untouched, you can omit it from the output.
+The **tag names must be exactly**:  
+- `<old_draft>` … `</old_draft>`  
+- `<optimized_draft>` … `</optimized_draft>`  
+Use correct casing, spelling, and closing.
 
-Make sure the optimized version:
-	•	Follows all writing rules (rule_1 to rule_7)
-	•	Sounds human, clear, and specific
-	•	Reflects better novelty, clarity, clickworthiness, and no fluff
-</rule_8>
+Every rewritten pair **must only** include one `<old_draft>` and one `<optimized_draft>`. Nothing more.  
+If you return the wrong format, the system will break.
+
+Repeat after me:  
+ No bullet points  
+ No summaries  
+ No lists  
+ No commentary  
+ Only clean XML blocks using the correct tags above.
+
+This is NOT optional. Follow the exact format — or fail the task.

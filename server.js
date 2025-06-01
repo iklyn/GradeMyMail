@@ -96,6 +96,7 @@ ${userMessage}`
 });
 
 // POST endpoint for fixing newsletter (FixMyMail)
+// POST endpoint for fixing newsletter (FixMyMail)
 app.post('/api/fix', async (req, res) => {
   const userMessage = req.body.message;
 
@@ -116,7 +117,8 @@ app.post('/api/fix', async (req, res) => {
           role: 'user',
           content: userMessage
         }
-      ]
+      ],
+      stream: true  // Ensure streaming is enabled
     };
 
     console.log("⏳ Sending request to OpenRouter for fixing...");
@@ -138,7 +140,8 @@ app.post('/api/fix', async (req, res) => {
     console.log("✅ AI server responded for fixing. Starting to stream...");
 
     // Set appropriate content type for streaming
-    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
     
     // Pipe the response directly to the frontend
     response.data.pipe(res);
