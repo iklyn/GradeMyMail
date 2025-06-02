@@ -128,6 +128,8 @@ function clearAllHighlights() {
   }
 }
 
+let lastTaggedAIResponse = '';
+
 async function sendMessage() {
   console.log('ðŸ“¤ Sending text to server...');
   const userInput = inputArea.innerText.trim();
@@ -155,14 +157,14 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        console.log('âœ… Streaming finished.');
+        console.log('✅ Streaming finished.');
         break;
       }
-
       const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
-      console.log('ðŸ“¥ Received chunk:', chunk);
+      console.log('📥 Received chunk:', chunk);
     }
+    lastTaggedAIResponse = fullText; // <-- Save the tagged AI response
 
     const allSentences = { easy: [], medium: [], hard: [] };
     const newSentences = parseTaggedSentences(fullText, allSentences);
@@ -405,6 +407,26 @@ function findSentenceMatch(originalText, sentence) {
   return bestMatch;
 }
 
+// Extract only the tagged sentences from AI response for FixMyMail
+function extractTaggedContentOnly(rawText) {
+  const taggedLines = [];
+  const regex = /<(fluff|spam_words|hard_to_read)>\s*(.*?)\s*<\/\1>/gi;
+  let match;
+
+  while ((match = regex.exec(rawText)) !== null) {
+    const tag = match[1].toLowerCase();
+    const sentence = match[2].trim();
+    
+    if (sentence) {
+      // Reconstruct the full tagged line
+      taggedLines.push(`<${tag}>${sentence}</${tag}>`);
+      console.log(`📌 Extracted tagged line: <${tag}>${sentence}</${tag}>`);
+    }
+  }
+
+  return taggedLines.join('\n\n');
+}
+
 function getWords(text) {
   return text
     .toLowerCase()
@@ -412,16 +434,38 @@ function getWords(text) {
     .split(/\s+/)
     .filter(word => word.length > 0);
 }
-
 function showFixMyMailButton() {
   const fixButton = document.getElementById('fixMyMailButton');
   if (fixButton) {
     fixButton.style.display = 'flex';
     fixButton.onclick = function () {
-      const taggedText = inputArea.innerText.trim();
-      const encodedText = encodeURIComponent(taggedText);
-      window.location.href = `fix.html?text=${encodedText}`;
-        };
+      // Extract ONLY the tagged sentences from the AI response
+      const taggedContentOnly = extractTaggedContentOnly(lastTaggedAIResponse);
+      
+      if (!taggedContentOnly.trim()) {
+        console.error('❌ No tagged content found to save');
+        alert('No tagged content found. Please try analyzing your text again.');
+        return;
+      }
+      
+      try {
+        localStorage.setItem('taggedText', taggedContentOnly);
+        console.log('💾 Saved ONLY tagged content to localStorage:', taggedContentOnly);
+      } catch (error) {
+        console.error('❌ Error saving to localStorage:', error);
+        // Fallback to sessionStorage
+        try {
+          sessionStorage.setItem('taggedText', taggedContentOnly);
+          console.log('💾 Saved ONLY tagged content to sessionStorage as fallback');
+        } catch (fallbackError) {
+          console.error('❌ Error saving to sessionStorage:', fallbackError);
+          alert('Error saving data. Please try again.');
+          return;
+        }
+      }
+      
+      window.location.href = 'fix.html';
+    };
   }
 }
 
