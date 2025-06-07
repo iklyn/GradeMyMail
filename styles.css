@@ -211,3 +211,7 @@ p {
   font-family: 'OnePlus Sans Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   font-weight: 300;
 }
+
+#legend.visible {
+  opacity: 1;
+}

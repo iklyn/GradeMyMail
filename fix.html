@@ -4,23 +4,147 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FixMyMail</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body class="fix-my-mail-page">
+  <style>
+    /* Custom font import */
+    @font-face {
+      font-family: 'OnePlus Sans Light';
+      src: url('fonts/OnePlusSans-Light.ttf') format('truetype');
+      font-weight: 300;
+      font-style: normal;
+      font-display: swap;
+    }
 
+    body {
+      font-family: 'OnePlus Sans Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+      font-weight: 300;
+      background: #f6f8fa;
+      text-align: center;
+      padding: 40px;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      font-family: 'OnePlus Sans Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+      font-weight: 300;
+      color: #333;
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      color: #666;
+      margin-bottom: 40px;
+      font-family: 'OnePlus Sans Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+      font-weight: 300;
+    }
+
+    .split-diff-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 2px;
+      background: white;
+      margin: 0 auto;
+      width: 90%;
+      max-width: 1200px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .split-left, .split-right {
+      width: 50%;
+      background: white;
+    }
+
+    .diff-header {
+      background: #f1f8ff;
+      padding: 12px 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #586069;
+      border-bottom: 1px solid #e1e4e8;
+      text-align: left;
+    }
+
+    .diff-content {
+      padding: 0;
+    }
+
+    .diff-line {
+      font-family: 'OnePlus Sans Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+      font-weight: 300;
+      padding: 12px 20px;
+      margin: 0;
+      border-bottom: 1px solid #f6f8fa;
+      text-align: left;
+      line-height: 1.5;
+      font-size: 1rem;
+      position: relative;
+    }
+
+    .diff-line:before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+    }
+
+    .diff-line.removed {
+      background-color: #ffeef0;
+      color: #24292e;
+    }
+
+    .diff-line.removed:before {
+      background-color: #d73a49;
+    }
+
+    .diff-line.added {
+      background-color: #e6ffed;
+      color: #24292e;
+    }
+
+    .diff-line.added:before {
+      background-color: #22863a;
+    }
+
+    .diff-line:last-child {
+      border-bottom: none;
+    }
+
+    /* Symbol indicators */
+    .diff-symbol {
+      display: inline-block;
+      width: 20px;
+      font-weight: 500;
+      user-select: none;
+    }
+
+    .removed .diff-symbol {
+      color: #d73a49;
+    }
+
+    .added .diff-symbol {
+      color: #22863a;
+    }
+  </style>
+</head>
+<body>
   <h1>FixMyMail</h1>
   <p class="subtitle">Here's how we improved your email for better clarity and readability.</p>
 
   <div class="split-diff-container">
     <div class="split-left">
-      <div class="diff-line removed">- This is a sentence we decided to remove.</div>
-      <div class="diff-line removed">- Another confusing sentence was removed here.</div>
+      <!-- Content will be populated by JavaScript -->
     </div>
     <div class="split-right">
-      <div class="diff-line added">+ This is a clearer version we added instead.</div>
-      <div class="diff-line added">+ Rewritten with better structure for easier reading.</div>
+      <!-- Content will be populated by JavaScript -->
     </div>
   </div>
 
+  <script src="fix.js"></script>
 </body>
 </html>

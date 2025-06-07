@@ -1,5 +1,5 @@
 let timeout = null;
-console.log("✅ Script.js loaded properly.");
+console.log("âœ… Script.js loaded properly.");
 
 const inputArea = document.getElementById('inputArea');
 const PLACEHOLDER_TEXT = "type something, what are you waiting for?";
@@ -27,7 +27,7 @@ inputArea.addEventListener('paste', (e) => {
   // Insert plain text at cursor position
   insertTextAtCursor(paste);
   
-  console.log('📋 Pasted plain text (formatting stripped)');
+  console.log('ðŸ“‹ Pasted plain text (formatting stripped)');
   
   // Trigger the analysis after paste
   clearTimeout(timeout);
@@ -67,7 +67,7 @@ function insertTextAtCursor(text) {
 
 // Handle keyboard input to also strip formatting
 inputArea.addEventListener('input', (e) => {
-  console.log('✍️ User typed or pasted something...');
+  console.log('âœï¸ User typed or pasted something...');
   
   // Strip any HTML tags that might have been inserted
   const currentText = inputArea.innerText;
@@ -118,7 +118,7 @@ function initializeOverlayContainer() {
   // Insert the overlay container as the first child of inputArea
   inputArea.insertBefore(overlayContainer, inputArea.firstChild);
 
-  console.log('✅ Overlay container initialized', overlayContainer);
+  console.log('âœ… Overlay container initialized', overlayContainer);
 }
 
 function clearAllHighlights() {
@@ -128,8 +128,10 @@ function clearAllHighlights() {
   }
 }
 
+let lastTaggedAIResponse = '';
+
 async function sendMessage() {
-  console.log('📤 Sending text to server...');
+  console.log('ðŸ“¤ Sending text to server...');
   const userInput = inputArea.innerText.trim();
 
   if (!userInput || userInput === PLACEHOLDER_TEXT) return;
@@ -142,7 +144,7 @@ async function sendMessage() {
     });
 
     if (!response.ok) {
-      console.error('❌ Server returned an error');
+      console.error('âŒ Server returned an error');
       return;
     }
 
@@ -150,7 +152,7 @@ async function sendMessage() {
     const decoder = new TextDecoder();
     let fullText = '';
 
-    console.log('📦 Streaming started...');
+    console.log('ðŸ“¦ Streaming started...');
 
     while (true) {
       const { done, value } = await reader.read();
@@ -158,11 +160,11 @@ async function sendMessage() {
         console.log('✅ Streaming finished.');
         break;
       }
-
       const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
       console.log('📥 Received chunk:', chunk);
     }
+    lastTaggedAIResponse = fullText; // <-- Save the tagged AI response
 
     const allSentences = { easy: [], medium: [], hard: [] };
     const newSentences = parseTaggedSentences(fullText, allSentences);
@@ -177,7 +179,7 @@ async function sendMessage() {
       }
     }
   } catch (error) {
-    console.error('❌ Error while streaming:', error);
+    console.error('âŒ Error while streaming:', error);
   }
 }
 
@@ -198,7 +200,7 @@ function parseTaggedSentences(rawText, allSentences) {
     if (sentence && !isSentenceProcessed(sentence, allSentences)) {
       allSentences[typeKey].push(sentence);
       newSentences.push({ type: typeKey, sentence: sentence });
-      console.log(`🎯 Parsed <${tag}> sentence: "${sentence}"`);
+      console.log(`ðŸŽ¯ Parsed <${tag}> sentence: "${sentence}"`);
     }
   }
 
@@ -229,7 +231,7 @@ async function processHighlightQueue(originalText, queue) {
     await sleep(200);
   }
 
-  console.log('✅ Progressive highlighting completed');
+  console.log('âœ… Progressive highlighting completed');
   showFixMyMailButton();
 }
 
@@ -240,14 +242,14 @@ function sleep(ms) {
 async function highlightWithSmoothEffect(originalText, sentence, highlightClass) {
   const match = findSentenceMatch(originalText, sentence);
   if (!match || match.score < 0.5) {
-    console.log(`❌ No good match found for: "${sentence}"`);
+    console.log(`âŒ No good match found for: "${sentence}"`);
     return;
   }
 
   console.log(`Found match for "${sentence}" -> "${match.text}" (score: ${match.score})`);
   const sentenceElement = createSentenceHighlight(match.text, highlightClass);
   if (!sentenceElement) {
-    console.log(`❌ Could not create highlight element for: "${match.text}"`);
+    console.log(`âŒ Could not create highlight element for: "${match.text}"`);
     return;
   }
 
@@ -263,7 +265,7 @@ function createSentenceHighlight(text, highlightClass) {
 
   const instances = findAllTextInstances(inputArea, text);
   if (!instances.length) {
-    console.log(`❌ No instances found for text: "${text}"`);
+    console.log(`âŒ No instances found for text: "${text}"`);
     return null;
   }
 
@@ -405,6 +407,26 @@ function findSentenceMatch(originalText, sentence) {
   return bestMatch;
 }
 
+// Extract only the tagged sentences from AI response for FixMyMail
+function extractTaggedContentOnly(rawText) {
+  const taggedLines = [];
+  const regex = /<(fluff|spam_words|hard_to_read)>\s*(.*?)\s*<\/\1>/gi;
+  let match;
+
+  while ((match = regex.exec(rawText)) !== null) {
+    const tag = match[1].toLowerCase();
+    const sentence = match[2].trim();
+    
+    if (sentence) {
+      // Reconstruct the full tagged line
+      taggedLines.push(`<${tag}>${sentence}</${tag}>`);
+      console.log(`📌 Extracted tagged line: <${tag}>${sentence}</${tag}>`);
+    }
+  }
+
+  return taggedLines.join('\n\n');
+}
+
 function getWords(text) {
   return text
     .toLowerCase()
@@ -412,12 +434,36 @@ function getWords(text) {
     .split(/\s+/)
     .filter(word => word.length > 0);
 }
-
 function showFixMyMailButton() {
   const fixButton = document.getElementById('fixMyMailButton');
   if (fixButton) {
     fixButton.style.display = 'flex';
     fixButton.onclick = function () {
+      // Extract ONLY the tagged sentences from the AI response
+      const taggedContentOnly = extractTaggedContentOnly(lastTaggedAIResponse);
+      
+      if (!taggedContentOnly.trim()) {
+        console.error('❌ No tagged content found to save');
+        alert('No tagged content found. Please try analyzing your text again.');
+        return;
+      }
+      
+      try {
+        localStorage.setItem('taggedText', taggedContentOnly);
+        console.log('💾 Saved ONLY tagged content to localStorage:', taggedContentOnly);
+      } catch (error) {
+        console.error('❌ Error saving to localStorage:', error);
+        // Fallback to sessionStorage
+        try {
+          sessionStorage.setItem('taggedText', taggedContentOnly);
+          console.log('💾 Saved ONLY tagged content to sessionStorage as fallback');
+        } catch (fallbackError) {
+          console.error('❌ Error saving to sessionStorage:', fallbackError);
+          alert('Error saving data. Please try again.');
+          return;
+        }
+      }
+      
       window.location.href = 'fix.html';
     };
   }
