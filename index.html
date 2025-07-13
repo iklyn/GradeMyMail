@@ -8,34 +8,31 @@
 </head>
 <body>
 
-  <!-- Top Bar with FixMyMail Button -->
   <div id="topBar">
     <div id="fixMyMailButton" style="display: none;">
-      <img src="ConstructionHammer.gif" alt="Fix Icon" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;">
-      <span style="vertical-align: middle;">FixMyMail</span>
+      <img src="ConstructionHammer.gif" alt="Fix Icon">
+      <span>FixMyMail</span>
     </div>
   </div>
 
   <h1>GradeMyMail</h1>
-  <p>Instant feedback to make your newsletter stand out.</p>
+  <p class="subtitle">Instant feedback to make your newsletter stand out.</p>
 
-  <!-- Editable input area -->
-  <div id="inputArea" contenteditable="true" data-placeholder="type something, what are you waiting for?"></div>
-  
-  <!-- Hidden analyze button (optional if you want automatic analysis later) -->
-  <button id="analyzeButton" style="display: none;">Analyze</button>
+  <div class="main-container">
+    <div id="inputArea" contenteditable="true" data-placeholder="type something, what are you waiting for?"></div>
+  </div>
 
   <div id="legend">
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #4DDDDF; border-radius: 50%;"></div>
+    <div class="legend-item">
+      <div class="legend-color-box" style="background-color: #4DDDDF;"></div>
       <span>Fluff</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #FEE404; border-radius: 50%;"></div>
+    <div class="legend-item">
+      <div class="legend-color-box" style="background-color: #FEE404;"></div>
       <span>Spam Words</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #FF3232; border-radius: 50%;"></div>
+    <div class="legend-item">
+      <div class="legend-color-box" style="background-color: #FF3232;"></div>
       <span>Hard to Read</span>
     </div>
   </div>
