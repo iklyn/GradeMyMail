@@ -256,12 +256,12 @@ function renderFullTextDiff(diffLines) {
   // Add headers
   const leftHeader = document.createElement('div');
   leftHeader.className = 'diff-header';
-  leftHeader.textContent = 'Original Text';
+  leftHeader.textContent = 'Original';
   leftColumn.appendChild(leftHeader);
 
   const rightHeader = document.createElement('div');
   rightHeader.className = 'diff-header';
-  rightHeader.textContent = 'Improved Text';
+  rightHeader.textContent = 'Improved';
   rightColumn.appendChild(rightHeader);
 
   // Add content containers
@@ -275,26 +275,31 @@ function renderFullTextDiff(diffLines) {
 
   // Render each line
   diffLines.forEach((line, index) => {
-    // Create original version (left side)
     const originalDiv = document.createElement('div');
-    if (line.type === 'changed') {
-      originalDiv.className = 'diff-line removed';
-      originalDiv.innerHTML = `<span class="diff-symbol">−</span>${escapeHtml(line.original)}`;
-    } else {
-      originalDiv.className = 'diff-line';
-      originalDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.original)}`;
-    }
-    leftContent.appendChild(originalDiv);
-
-    // Create improved version (right side)
     const improvedDiv = document.createElement('div');
-    if (line.type === 'changed') {
-      improvedDiv.className = 'diff-line added';
-      improvedDiv.innerHTML = `<span class="diff-symbol">+</span>${escapeHtml(line.improved)}`;
-    } else {
-      improvedDiv.className = 'diff-line';
-      improvedDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.improved)}`;
+
+    switch (line.type) {
+      case 'unchanged':
+        originalDiv.className = 'diff-line';
+        originalDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.original)}`;
+        improvedDiv.className = 'diff-line';
+        improvedDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.improved)}`;
+        break;
+      case 'added':
+        originalDiv.className = 'diff-line';
+        originalDiv.innerHTML = `&nbsp;`;
+        improvedDiv.className = 'diff-line added';
+        improvedDiv.innerHTML = `<span class="diff-symbol">+</span>${escapeHtml(line.improved)}`;
+        break;
+      case 'removed':
+        originalDiv.className = 'diff-line removed';
+        originalDiv.innerHTML = `<span class="diff-symbol">−</span>${escapeHtml(line.original)}`;
+        improvedDiv.className = 'diff-line';
+        improvedDiv.innerHTML = `&nbsp;`;
+        break;
     }
+
+    leftContent.appendChild(originalDiv);
     rightContent.appendChild(improvedDiv);
   });
 
@@ -464,43 +469,68 @@ function escapeRegExp(string) {
 }
 
 // Generate line-by-line diff between original and improved text
-/* ------------------------------------------------------------------
-   Helper - split text into *sentence* units (instead of whole paragraphs)
------------------------------------------------------------------- */
-function splitIntoUnits(text) {
-  return (
-    text
-      .replace(/\r\n/g, "\n")            // normalise line-breaks
-      .split("\n")                       // first split on hard returns
-      .map(p => p.trim())
-      .filter(Boolean)                   // drop blank lines
-      .flatMap(p => {
-        // then split each paragraph into sentences
-        const sentences = p.match(/[^.!?]+[.!?]*/g);
-        return sentences ? sentences.map(s => s.trim()) : [p];
-      })
-  );
-}
+
 
 function generateLineDiff(originalText, improvedText) {
-  const originalUnits  = splitIntoUnits(originalText);
-  const improvedUnits  = splitIntoUnits(improvedText);
+  const originalSentences = originalText.match(/[^.!?]+[.!?]*/g) || [];
+  const improvedSentences = improvedText.match(/[^.!?]+[.!?]*/g) || [];
+  const diff = [];
 
-  const diffLines = [];
-  const max = Math.max(originalUnits.length, improvedUnits.length);
+  let i = 0;
+  let j = 0;
 
-  for (let i = 0; i < max; i++) {
-    const orig = originalUnits[i]  || "";
-    const imp  = improvedUnits[i]  || "";
+  while (i < originalSentences.length || j < improvedSentences.length) {
+    const originalSentence = originalSentences[i];
+    const improvedSentence = improvedSentences[j];
 
-    diffLines.push(
-      orig === imp
-        ? { type: "unchanged", original: orig, improved: imp }
-        : { type: "changed",   original: orig, improved: imp }
-    );
+    if (originalSentence === improvedSentence) {
+      diff.push({ type: 'unchanged', original: originalSentence, improved: improvedSentence });
+      i++;
+      j++;
+    } else {
+      let foundMatch = false;
+      for (let k = j + 1; k < improvedSentences.length; k++) {
+        if (originalSentences[i] === improvedSentences[k]) {
+          for (let l = j; l < k; l++) {
+            diff.push({ type: 'added', original: '', improved: improvedSentences[l] });
+          }
+          diff.push({ type: 'unchanged', original: originalSentences[i], improved: improvedSentences[k] });
+          i++;
+          j = k + 1;
+          foundMatch = true;
+          break;
+        }
+      }
+
+      if (!foundMatch) {
+        for (let k = i + 1; k < originalSentences.length; k++) {
+          if (originalSentences[k] === improvedSentences[j]) {
+            for (let l = i; l < k; l++) {
+              diff.push({ type: 'removed', original: originalSentences[l], improved: '' });
+            }
+            diff.push({ type: 'unchanged', original: originalSentences[k], improved: improvedSentences[j] });
+            j++;
+            i = k + 1;
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundMatch) {
+        if (originalSentence !== undefined) {
+          diff.push({ type: 'removed', original: originalSentence, improved: '' });
+          i++;
+        }
+        if (improvedSentence !== undefined) {
+          diff.push({ type: 'added', original: '', improved: improvedSentence });
+          j++;
+        }
+      }
+    }
   }
 
-  return diffLines;
+  return diff;
 }
 
 // Export functions for potential external use
