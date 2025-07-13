@@ -22,10 +22,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.fixMyMailData = storedData;           // expose globally for later use
   }
 
-  const taggedBlob = getTaggedTextFromStorage(); // <— helper you added earlier
+  const urlParams = new URLSearchParams(window.location.search);
+  const id = urlParams.get("id");
+
+if (!id) {
+  console.error("❌ No ID found in URL");
+  showError("Missing data ID. Please return to GradeMyMail.");
+  return;
+}
+
+try {
+  const response = await fetch(`http://127.0.0.1:3000/api/load?id=${id}`);
+  if (!response.ok) {
+    throw new Error(`Server returned ${response.status}`);
+  }
+
+  const { payload } = await response.json();
+  const taggedBlob = payload;
 
   if (!taggedBlob || !taggedBlob.trim()) {
-    console.log('❌ No tagged text found in storage');
+    console.log('❌ No tagged text found from server');
     showError('No content to fix. Please go back to GradeMyMail first.');
     return;
   }
@@ -39,7 +55,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   console.log(`🎯 Extracted ${taggedSentences.length} tagged sentences`);
-  await sendToFixAPI(taggedSentences);           // kicks off the /api/fix call
+  await sendToFixAPI(taggedSentences);
+} catch (err) {
+  console.error('❌ Error fetching tagged text:', err);
+  showError('Failed to load content. Please try again.');
+}
+
+
+  
 });
 
 // Extract tagged sentences from the full text
@@ -151,50 +174,13 @@ async function sendToFixAPI(taggedSentences) {
       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
     }
 
-    // Handle streaming response from OpenRouter
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-
-    console.log('📦 Streaming response from server...');
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        console.log('✅ Streaming finished.');
-        break;
-      }
-
-      const chunk = decoder.decode(value, { stream: true });
-      
-      // Parse OpenRouter streaming format
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            continue;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-              fullResponse += parsed.choices[0].delta.content;
-            }
-          } catch (e) {
-            // Skip invalid JSON lines
-            continue;
-          }
-        }
-      }
-    }
+    const data = await response.json();
+    const fullResponse = data.choices[0].message.content;
 
     hideLoading();
     console.log('📝 Full response received:', fullResponse);
     
-    // Wait a bit to ensure all content is received
-    setTimeout(() => {
-      parseAndRenderDiffs(fullResponse);
-    }, 100);
+    parseAndRenderDiffs(fullResponse);
 
   } catch (error) {
     hideLoading();

@@ -128,8 +128,10 @@ function clearAllHighlights() {
   }
 }
 
+let lastAIResponse = '';
+
 async function sendMessage() {
-  console.log('ðŸ“¤ Sending text to server...');
+  console.log('📬 Sending text to server...');
   const userInput = inputArea.innerText.trim();
 
   if (!userInput || userInput === PLACEHOLDER_TEXT) return;
@@ -142,27 +144,14 @@ async function sendMessage() {
     });
 
     if (!response.ok) {
-      console.error('âŒ Server returned an error');
+      console.error('❌ Server returned an error');
       return;
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
+    const data = await response.json();
+    const fullText = data.choices[0].message.content;
 
-    console.log('ðŸ“¦ Streaming started...');
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        console.log('âœ… Streaming finished.');
-        break;
-      }
-
-      const chunk = decoder.decode(value, { stream: true });
-      fullText += chunk;
-      console.log('ðŸ“¥ Received chunk:', chunk);
-    }
+    lastAIResponse = fullText; // Store the AI response
 
     const allSentences = { easy: [], medium: [], hard: [] };
     const newSentences = parseTaggedSentences(fullText, allSentences);
@@ -177,7 +166,7 @@ async function sendMessage() {
       }
     }
   } catch (error) {
-    console.error('âŒ Error while streaming:', error);
+    console.error('❌ Error sending message:', error);
   }
 }
 
@@ -417,13 +406,50 @@ function showFixMyMailButton() {
   const fixButton = document.getElementById('fixMyMailButton');
   if (fixButton) {
     fixButton.style.display = 'flex';
-    fixButton.onclick = function () {
-      const taggedText = inputArea.innerText.trim();
-      const encodedText = encodeURIComponent(taggedText);
-      window.location.href = `fix.html?text=${encodedText}`;
-        };
+    fixButton.onclick = async function () {
+      const taggedText = lastAIResponse; // Full AI response with tags
+      const originalText = inputArea.innerText.trim(); // User's original text
+
+      if (!taggedText || !originalText) {
+        alert("Could not get the necessary content to fix. Please try again.");
+        return;
+      }
+
+      // Store the original text and the tagged AI response in localStorage
+      // so that fix.js can access them to create the diff view.
+      const dataForFixPage = {
+        fullOriginalText: originalText,
+        taggedContent: taggedText 
+      };
+      localStorage.setItem('fixMyMailData', JSON.stringify(dataForFixPage));
+
+      console.log("🚀 Storing tagged text and redirecting to FixMyMail...");
+      
+      try {
+        // We still use the backend temp store to pass the tagged text,
+        // as it's needed to initiate the /api/fix call.
+        const response = await fetch('http://127.0.0.1:3000/api/store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: taggedText })
+        });
+
+        if (!response.ok) {
+          localStorage.removeItem('fixMyMailData'); // Clean up on failure
+          throw new Error(`Store failed: ${response.status}`);
+        }
+
+        const { id } = await response.json();
+        window.location.href = `fix.html?id=${id}`;
+      } catch (err) {
+        localStorage.removeItem('fixMyMailData'); // Clean up on failure
+        console.error('❌ Failed to store content for FixMyMail:', err);
+        alert('Could not continue to the FixMyMail page. Please try again.');
+      }
+    };
   }
 }
+
 
 function showLegendIfHidden() {
   const legend = document.getElementById('legend');

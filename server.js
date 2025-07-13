@@ -4,7 +4,10 @@ const express = require('express');
 const cors = require('cors');       
 const axios = require('axios');     
 const fs = require('fs');           
-const path = require('path');       
+const path = require('path');  
+const { v4: uuidv4 } = require('uuid');   // new
+const tempStore = new Map();              // in-memory cache (auto-cleared on restart)
+
 
 // Initialize the express app
 const app = express();
@@ -76,18 +79,13 @@ ${userMessage}`
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:3000',
           'X-Title': 'GradeMyMail'
-        },
-        responseType: 'stream'
+        }
       }
     );
 
-    console.log("✅ AI server responded for analysis. Starting to stream...");
+    console.log("✅ AI server responded for analysis.");
 
-    // Set appropriate content type for streaming
-    res.setHeader('Content-Type', 'application/json');
-    
-    // Pipe the response directly to the frontend
-    response.data.pipe(res);
+    res.json(response.data);
 
   } catch (error) {
     console.error('❌ Error talking to AI for analysis:', error.response?.data || error.message);
@@ -130,24 +128,60 @@ app.post('/api/fix', async (req, res) => {
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:3000',
           'X-Title': 'FixMyMail'
-        },
-        responseType: 'stream'
+        }
       }
     );
 
-    console.log("✅ AI server responded for fixing. Starting to stream...");
+    console.log("✅ AI server responded for fixing.");
 
-    // Set appropriate content type for streaming
-    res.setHeader('Content-Type', 'text/plain');
-    
-    // Pipe the response directly to the frontend
-    response.data.pipe(res);
+    res.json(response.data);
 
   } catch (error) {
     console.error('❌ Error talking to AI for fixing:', error.response?.data || error.message);
     res.status(500).json({ error: 'Internal server error. Please try again.' });
   }
 });
+
+// POST /api/store   – persist blob, return short id
+app.post('/api/store', (req, res) => {
+  try {
+    const { payload } = req.body;            // anything you need to save
+    if (!payload) return res.status(400).json({ error: 'No payload in body' });
+
+    const id = uuidv4().slice(0, 8);         // short 8-char key
+    tempStore.set(id, { payload, created: Date.now() });
+
+    res.json({ id });                         // { "id": "abc123ef" }
+  } catch (err) {
+    console.error('❌ /api/store error:', err);
+    res.status(500).json({ error: 'Server failure' });
+  }
+});
+
+// GET /api/load?id=XYZ   – fetch previously stored blob
+app.get('/api/load', (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id || !tempStore.has(id)) {
+      return res.status(404).json({ error: 'ID not found or expired' });
+    }
+    res.json(tempStore.get(id));             // returns { payload, created }
+  } catch (err) {
+    console.error('❌ /api/load error:', err);
+    res.status(500).json({ error: 'Server failure' });
+  }
+});
+
+
+// simple TTL cleanup: remove items older than 30 min every 10 min
+setInterval(() => {
+  const THIRTY_MIN = 30 * 60 * 1000;
+  const now = Date.now();
+  for (const [key, value] of tempStore) {
+    if (now - value.created > THIRTY_MIN) tempStore.delete(key);
+  }
+}, 10 * 60 * 1000);
+
 
 // Start the server
 app.listen(3000, '0.0.0.0', () => {
