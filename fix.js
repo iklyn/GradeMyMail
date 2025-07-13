@@ -7,8 +7,7 @@ let originalTaggedText = '';
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 FixMyMail page loaded, starting bootstrap…');
 
-  // Make sure the split columns exist
-  const leftColumn  = document.querySelector('.split-left');
+  const leftColumn = document.querySelector('.split-left');
   const rightColumn = document.querySelector('.split-right');
   if (!leftColumn || !rightColumn) {
     console.error('❌ Split columns not found in DOM');
@@ -17,52 +16,50 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   console.log('✅ Split columns found');
 
-  const storedData = getFullDataFromStorage();   // <— already defined below
+  const storedData = getFullDataFromStorage();
   if (storedData) {
-    window.fixMyMailData = storedData;           // expose globally for later use
+    window.fixMyMailData = storedData;
   }
 
   const urlParams = new URLSearchParams(window.location.search);
   const id = urlParams.get("id");
 
-if (!id) {
-  console.error("❌ No ID found in URL");
-  showError("Missing data ID. Please return to GradeMyMail.");
-  return;
-}
-
-try {
-  const response = await fetch(`http://127.0.0.1:3000/api/load?id=${id}`);
-  if (!response.ok) {
-    throw new Error(`Server returned ${response.status}`);
-  }
-
-  const { payload } = await response.json();
-  const taggedBlob = payload;
-
-  if (!taggedBlob || !taggedBlob.trim()) {
-    console.log('❌ No tagged text found from server');
-    showError('No content to fix. Please go back to GradeMyMail first.');
+  if (!id) {
+    console.error("❌ No ID found in URL");
+    showError("Missing data ID. Please return to GradeMyMail.");
     return;
   }
 
-  console.log('📝 Tagged blob found:', taggedBlob.substring(0, 120) + '…');
+  try {
+    const response = await fetch(`http://127.0.0.1:3000/api/load?id=${id}`);
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
 
-  const taggedSentences = extractTaggedSentences(taggedBlob);
-  if (taggedSentences.length === 0) {
-    showError('No <fluff> / <spam_words> / <hard_to_read> tags detected.');
-    return;
+    const { payload } = await response.json();
+    const taggedBlob = payload;
+
+    if (!taggedBlob || !taggedBlob.trim()) {
+      console.log('❌ No tagged text found from server');
+      showError('No content to fix. Please go back to GradeMyMail first.');
+      return;
+    }
+
+    console.log('📝 Tagged blob found:', taggedBlob.substring(0, 120) + '…');
+
+    const taggedSentences = extractTaggedSentences(taggedBlob);
+    if (taggedSentences.length === 0) {
+      showError('No <fluff> / <spam_words> / <hard_to_read> tags detected.');
+      return;
+    }
+
+    console.log(`🎯 Extracted ${taggedSentences.length} tagged sentences`);
+    await sendToFixAPI(taggedSentences);
+
+  } catch (err) {
+    console.error('❌ Error fetching tagged text:', err);
+    showError('Failed to load content. Please try again.');
   }
-
-  console.log(`🎯 Extracted ${taggedSentences.length} tagged sentences`);
-  await sendToFixAPI(taggedSentences);
-} catch (err) {
-  console.error('❌ Error fetching tagged text:', err);
-  showError('Failed to load content. Please try again.');
-}
-
-
-  
 });
 
 // Extract tagged sentences from the full text
@@ -219,25 +216,19 @@ function parseAndRenderDiffs(responseText) {
 
   console.log(`🎯 Found ${pairs.length} improvement pairs`);
   
-  // Get the original full text
-  const originalFullText = window.fixMyMailData?.fullOriginalText || 'Original text not found';
+  // Get the original full HTML
+  const originalFullHTML = window.fixMyMailData?.fullOriginalHTML || '<p>Original text not found</p>';
   
   // Reconstruct the full improved text
-  const improvedFullText = reconstructFullImprovedText(originalFullText, pairs);
-  
-  // Generate line-by-line diff
-  const diffLines = generateLineDiff(originalFullText, improvedFullText);
+  const improvedFullHTML = reconstructFullImprovedHTML(originalFullHTML, pairs);
   
   // Render the full text diff
-  renderFullTextDiff(diffLines);
+  renderFullTextDiff(originalFullHTML, improvedFullHTML);
 }
 
 // Render the diff pairs in the split view
 // Render the full text diff in the split view
-function renderFullTextDiff(diffLines) {
-  // First restore the original structure if it was replaced by loading state
-  restoreSplitStructure();
-  
+function renderFullTextDiff(originalHTML, improvedHTML) {
   const leftColumn = document.querySelector('.split-left');
   const rightColumn = document.querySelector('.split-right');
   
@@ -267,46 +258,87 @@ function renderFullTextDiff(diffLines) {
   // Add content containers
   const leftContent = document.createElement('div');
   leftContent.className = 'diff-content';
+  leftContent.innerHTML = `<div class="editable-area">${originalHTML}</div>`;
   leftColumn.appendChild(leftContent);
 
   const rightContent = document.createElement('div');
   rightContent.className = 'diff-content';
+  rightContent.innerHTML = `<div class="editable-area">${improvedHTML}</div>`;
   rightColumn.appendChild(rightContent);
 
-  // Render each line
-  diffLines.forEach((line, index) => {
-    const originalDiv = document.createElement('div');
-    const improvedDiv = document.createElement('div');
+  // Add unique IDs and event listeners for hover-sync
+  addHoverSync();
 
-    switch (line.type) {
-      case 'unchanged':
-        originalDiv.className = 'diff-line';
-        originalDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.original)}`;
-        improvedDiv.className = 'diff-line';
-        improvedDiv.innerHTML = `<span class="diff-symbol">&nbsp;</span>${escapeHtml(line.improved)}`;
-        break;
-      case 'added':
-        originalDiv.className = 'diff-line';
-        originalDiv.innerHTML = `&nbsp;`;
-        improvedDiv.className = 'diff-line added';
-        improvedDiv.innerHTML = `<span class="diff-symbol">+</span>${escapeHtml(line.improved)}`;
-        break;
-      case 'removed':
-        originalDiv.className = 'diff-line removed';
-        originalDiv.innerHTML = `<span class="diff-symbol">−</span>${escapeHtml(line.original)}`;
-        improvedDiv.className = 'diff-line';
-        improvedDiv.innerHTML = `&nbsp;`;
-        break;
-    }
-
-    leftContent.appendChild(originalDiv);
-    rightContent.appendChild(improvedDiv);
-  });
-
-  console.log(`🎨 Rendered ${diffLines.length} lines successfully`);
+  console.log(`🎨 Rendered full text diff successfully`);
   
   // Clear the storage after successful rendering
   clearTaggedTextFromStorage();
+}
+
+function reconstructFullImprovedHTML(originalHTML, improvementPairs) {
+  let improvedHTML = originalHTML;
+
+  // Create a temporary DOM element to parse the original HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = improvedHTML;
+
+  // Find all highlighted sentences in the temporary DOM
+  const highlightedElements = tempDiv.querySelectorAll('.highlight-wrapper');
+
+  highlightedElements.forEach(element => {
+    const originalSentence = element.dataset.text;
+    const pair = improvementPairs.find(p => p.original === originalSentence);
+
+    if (pair) {
+      // Create a new element for the improved sentence
+      const improvedElement = document.createElement('span');
+      improvedElement.textContent = pair.improved;
+      improvedElement.className = 'highlight-wrapper'; // Keep the wrapper for styling
+      improvedElement.dataset.text = pair.improved;
+
+      // Replace the original element with the improved one
+      element.parentNode.replaceChild(improvedElement, element);
+    }
+  });
+
+  return tempDiv.innerHTML;
+}
+
+function addHoverSync() {
+  const leftContent = document.querySelector('.split-left .diff-content');
+  const rightContent = document.querySelector('.split-right .diff-content');
+
+  const leftSentences = leftContent.querySelectorAll('.highlight-wrapper');
+  const rightSentences = rightContent.querySelectorAll('.highlight-wrapper');
+
+  // Assign unique IDs
+  leftSentences.forEach((el, i) => {
+    const id = `sentence-${i}`;
+    el.dataset.syncId = id;
+    if (rightSentences[i]) {
+      rightSentences[i].dataset.syncId = id;
+    }
+  });
+
+  // Add event listeners
+  const allSentences = document.querySelectorAll('[data-sync-id]');
+  allSentences.forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const id = el.dataset.syncId;
+      const matchingElements = document.querySelectorAll(`[data-sync-id="${id}"]`);
+      matchingElements.forEach(match => {
+        match.style.backgroundColor = 'rgba(255, 255, 0, 0.3)'; // Highlight color
+      });
+    });
+
+    el.addEventListener('mouseleave', () => {
+      const id = el.dataset.syncId;
+      const matchingElements = document.querySelectorAll(`[data-sync-id="${id}"]`);
+      matchingElements.forEach(match => {
+        match.style.backgroundColor = ''; // Remove highlight
+      });
+    });
+  });
 }
 
 // Restore the original split structure if it was replaced
@@ -466,6 +498,70 @@ function reconstructFullImprovedText(originalFullText, improvementPairs) {
 // Helper function to escape regex special characters
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function reconstructFullImprovedHTML(originalHTML, improvementPairs) {
+  let improvedHTML = originalHTML;
+
+  // Create a temporary DOM element to parse the original HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = improvedHTML;
+
+  // Find all highlighted sentences in the temporary DOM
+  const highlightedElements = tempDiv.querySelectorAll('.highlight-wrapper');
+
+  highlightedElements.forEach(element => {
+    const originalSentence = element.dataset.text;
+    const pair = improvementPairs.find(p => p.original === originalSentence);
+
+    if (pair) {
+      // Create a new element for the improved sentence
+      const improvedElement = document.createElement('span');
+      improvedElement.textContent = pair.improved;
+      improvedElement.className = 'highlight-wrapper'; // Keep the wrapper for styling
+      improvedElement.dataset.text = pair.improved;
+
+      // Replace the original element with the improved one
+      element.parentNode.replaceChild(improvedElement, element);
+    }
+  });
+
+  return tempDiv.innerHTML;
+}
+
+function addHoverSync() {
+  const rightContent = document.querySelector('.split-right .diff-content');
+  const rightSentences = rightContent.querySelectorAll('.highlight-wrapper');
+
+  // Assign unique IDs
+  rightSentences.forEach((el, i) => {
+    const id = `sentence-${i}`;
+    el.dataset.syncId = id;
+  });
+
+  // Add event listeners
+  const allSentences = rightContent.querySelectorAll('[data-sync-id]');
+  allSentences.forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const id = el.dataset.syncId;
+      const iframe = document.getElementById('original-side');
+      iframe.contentWindow.postMessage({ type: 'hover', id }, '*');
+      const matchingElements = rightContent.querySelectorAll(`[data-sync-id="${id}"]`);
+      matchingElements.forEach(match => {
+        match.style.backgroundColor = 'rgba(255, 255, 0, 0.3)'; // Highlight color
+      });
+    });
+
+    el.addEventListener('mouseleave', () => {
+      const id = el.dataset.syncId;
+      const iframe = document.getElementById('original-side');
+      iframe.contentWindow.postMessage({ type: 'unhover', id }, '*');
+      const matchingElements = rightContent.querySelectorAll(`[data-sync-id="${id}"]`);
+      matchingElements.forEach(match => {
+        match.style.backgroundColor = ''; // Remove highlight
+      });
+    });
+  });
 }
 
 // Generate line-by-line diff between original and improved text

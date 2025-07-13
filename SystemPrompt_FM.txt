@@ -231,3 +231,5 @@ Make sure the optimized version:
 	•	Sounds human, clear, and specific
 	•	Reflects better novelty, clarity, clickworthiness, and no fluff
 </rule_8>
+
+**IMPORTANT:** Do not include any other text or explanations in your response. Only provide the `<old_draft>` and `<optimized_draft>` pairs.

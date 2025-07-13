@@ -1,7 +1,7 @@
 let timeout = null;
 console.log("âœ… Script.js loaded properly.");
 
-const inputArea = document.getElementById('inputArea');
+const inputArea = document.querySelector('.editable-area');
 const PLACEHOLDER_TEXT = "type something, what are you waiting for?";
 
 // Track which sentences we've already highlighted to avoid duplicates
@@ -9,7 +9,39 @@ const highlightedSentences = new Set();
 
 // Initialize overlay container on page load
 document.addEventListener('DOMContentLoaded', () => {
-  initializeOverlayContainer();
+  const urlParams = new URLSearchParams(window.location.search);
+  const isIframeView = urlParams.get('view') === 'iframe';
+
+  if (isIframeView) {
+    // Iframe-specific logic
+    document.body.style.padding = '0';
+    const inputArea = document.querySelector('.editable-area');
+    inputArea.contentEditable = false;
+
+    window.addEventListener('message', event => {
+      if (event.data.type === 'loadContent') {
+        inputArea.innerHTML = event.data.html;
+      }
+    });
+
+    inputArea.addEventListener('mouseover', event => {
+      const target = event.target.closest('.highlight-wrapper');
+      if (target) {
+        window.parent.postMessage({ type: 'hover', id: target.dataset.syncId }, '*');
+      }
+    });
+
+    inputArea.addEventListener('mouseout', event => {
+      const target = event.target.closest('.highlight-wrapper');
+      if (target) {
+        window.parent.postMessage({ type: 'unhover', id: target.dataset.syncId }, '*');
+      }
+    });
+
+  } else {
+    // Original GradeMyMail logic
+    initializeOverlayContainer();
+  }
 });
 
 // Re-initialize overlay container when window resizes
@@ -418,7 +450,8 @@ function showFixMyMailButton() {
       // Store the original text and the tagged AI response in localStorage
       // so that fix.js can access them to create the diff view.
       const dataForFixPage = {
-        fullOriginalText: originalText,
+        fullOriginalText: originalText, // Keep plain text for AI
+        fullOriginalHTML: inputArea.innerHTML, // Pass HTML for rendering
         taggedContent: taggedText 
       };
       localStorage.setItem('fixMyMailData', JSON.stringify(dataForFixPage));
