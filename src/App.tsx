@@ -1,60 +1,53 @@
 import { useState } from 'react';
-import reactLogo from '@assets/react.svg';
-import viteLogo from '/vite.svg';
-import { formatDate } from '@utils/index';
+import SimpleDemo from './components/SimpleDemo';
+import SecurityDemo from './components/SecurityDemo';
+import RealTimeAnalysisDemo from './components/RealTimeAnalysisDemo';
 
 function App() {
-  const [count, setCount] = useState(0);
+  const [currentDemo, setCurrentDemo] = useState<'simple' | 'security' | 'analysis'>('analysis');
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8">
-      <div className="flex gap-8 mb-8">
-        <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">
-          <img
-            src={viteLogo}
-            className="h-24 w-24 hover:drop-shadow-lg transition-all duration-300 hover:scale-110"
-            alt="Vite logo"
-          />
-        </a>
-        <a href="https://react.dev" target="_blank" rel="noopener noreferrer">
-          <img
-            src={reactLogo}
-            className="h-24 w-24 hover:drop-shadow-lg transition-all duration-300 hover:scale-110 animate-spin"
-            style={{ animationDuration: '20s' }}
-            alt="React logo"
-          />
-        </a>
-      </div>
-
-      <h1 className="text-4xl font-bold text-gray-900 mb-8">
-        Email Analysis System
-      </h1>
-
-      <div className="card max-w-md">
-        <button
-          className="btn-primary mb-4"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-        <p className="text-gray-600 text-center">
-          Edit{' '}
-          <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
-            src/App.tsx
-          </code>{' '}
-          and save to test HMR
-        </p>
-      </div>
-
-      <p className="text-gray-500 text-sm mt-8 text-center max-w-md">
-        Modern React project with Vite, TypeScript, Tailwind CSS, and
-        industry-standard tooling
-      </p>
-
-      <div className="mt-4 text-xs text-gray-400 text-center">
-        Project initialized: {formatDate(new Date())}
-        {/* Test comment for Husky hook verification */}
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-sm border-b">
+        <div className="max-w-4xl mx-auto px-6 py-4">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setCurrentDemo('simple')}
+              className={`px-4 py-2 rounded-md ${
+                currentDemo === 'simple'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Simple Demo
+            </button>
+            <button
+              onClick={() => setCurrentDemo('security')}
+              className={`px-4 py-2 rounded-md ${
+                currentDemo === 'security'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Security Demo
+            </button>
+            <button
+              onClick={() => setCurrentDemo('analysis')}
+              className={`px-4 py-2 rounded-md ${
+                currentDemo === 'analysis'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Real-Time Analysis
+            </button>
+          </div>
+        </div>
+      </nav>
+      
+      {currentDemo === 'simple' && <SimpleDemo />}
+      {currentDemo === 'security' && <SecurityDemo />}
+      {currentDemo === 'analysis' && <RealTimeAnalysisDemo />}
     </div>
   );
 }
