@@ -39,3 +39,14 @@ export interface UserPreferences {
   notifications: boolean;
   analysisDepth: 'basic' | 'detailed' | 'comprehensive';
 }
+
+// Re-export highlighting types for convenience
+export type {
+  HighlightRange,
+  HighlightPosition,
+  HighlightColors,
+  AnimationState,
+  HighlightingConfig,
+  HighlightingState,
+  HighlightingEngine,
+} from './highlighting';
