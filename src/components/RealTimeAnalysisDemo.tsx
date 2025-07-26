@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor/RichTextEditor';
-import { useRealTimeAnalysis, useEditorAnalysis } from '../hooks/useRealTimeAnalysis';
+import { useEditorAnalysis } from '../hooks/useRealTimeAnalysis';
 import type { AnalysisState, ExtractedContent } from '../services/analysisEngine';
 
 // Demo component for real-time analysis
@@ -58,7 +58,7 @@ const RealTimeAnalysisDemo: React.FC = () => {
   }, []);
 
   // Use the editor analysis hook
-  const analysis = useEditorAnalysis(editorRef, {
+  const analysis = useEditorAnalysis(editorRef as React.RefObject<{ getHTML: () => string; getPlainText: () => string }>, {
     ...analysisConfig,
     onAnalysisStart: handleAnalysisStart,
     onAnalysisComplete: handleAnalysisComplete,

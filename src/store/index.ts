@@ -35,12 +35,46 @@ interface UIState {
   theme: 'light' | 'dark';
 }
 
-// Error state interface
+// Enhanced error classification types
+export type ErrorType = 'network' | 'validation' | 'ai' | 'client' | 'server' | 'storage' | 'timeout' | 'rate_limit';
+export type ErrorSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+// Structured error interface
+export interface StructuredError {
+  id: string;
+  type: ErrorType;
+  severity: ErrorSeverity;
+  message: string;
+  userMessage: string;
+  technicalMessage: string;
+  timestamp: Date;
+  retryable: boolean;
+  suggestions: string[];
+  context?: Record<string, any>;
+  recoveryActions?: RecoveryAction[];
+}
+
+// Recovery action interface
+export interface RecoveryAction {
+  id: string;
+  label: string;
+  description: string;
+  action: () => Promise<void> | void;
+  primary?: boolean;
+}
+
+// Error state interface with enhanced features
 interface ErrorState {
   hasError: boolean;
-  errorMessage?: string;
-  errorType?: 'network' | 'validation' | 'ai' | 'client' | 'server';
-  lastError?: Error;
+  errors: StructuredError[];
+  currentError?: StructuredError;
+  errorHistory: StructuredError[];
+  retryCount: number;
+  lastRetryAt?: Date;
+  isRecovering: boolean;
+  recoveryProgress: number;
+  fallbackMode: boolean;
+  preservedState?: Record<string, any>;
 }
 
 // Combined store interface
@@ -66,9 +100,18 @@ interface AppStore {
   toggleLegend: () => void;
   setTheme: (theme: 'light' | 'dark') => void;
   
-  // Actions for error handling
-  setError: (error: Partial<ErrorState>) => void;
-  clearError: () => void;
+  // Enhanced actions for error handling
+  addError: (error: Omit<StructuredError, 'id' | 'timestamp'>) => void;
+  removeError: (errorId: string) => void;
+  setCurrentError: (errorId?: string) => void;
+  clearAllErrors: () => void;
+  incrementRetryCount: () => void;
+  resetRetryCount: () => void;
+  setRecovering: (isRecovering: boolean, progress?: number) => void;
+  setFallbackMode: (enabled: boolean) => void;
+  preserveState: (state: Record<string, any>) => void;
+  restoreState: () => Record<string, any> | undefined;
+  getErrorById: (errorId: string) => StructuredError | undefined;
   
   // Utility actions
   reset: () => void;
@@ -87,9 +130,15 @@ const initialUIState: UIState = {
 
 const initialErrorState: ErrorState = {
   hasError: false,
-  errorMessage: undefined,
-  errorType: undefined,
-  lastError: undefined,
+  errors: [],
+  currentError: undefined,
+  errorHistory: [],
+  retryCount: 0,
+  lastRetryAt: undefined,
+  isRecovering: false,
+  recoveryProgress: 0,
+  fallbackMode: false,
+  preservedState: undefined,
 };
 
 // Create the store
@@ -176,18 +225,170 @@ export const useAppStore = create<AppStore>()(
           'setTheme'
         ),
       
-      // Error actions
-      setError: (error) =>
+      // Enhanced error actions
+      addError: (errorData) =>
         set(
-          (state) => ({
-            error: { ...state.error, hasError: true, ...error },
-          }),
+          (state) => {
+            const error: StructuredError = {
+              ...errorData,
+              id: crypto.randomUUID(),
+              timestamp: new Date(),
+            };
+            
+            const errors = [...state.error.errors, error];
+            const errorHistory = [...state.error.errorHistory, error].slice(-50); // Keep last 50 errors
+            
+            return {
+              error: {
+                ...state.error,
+                hasError: true,
+                errors,
+                errorHistory,
+                currentError: error,
+              },
+            };
+          },
           false,
-          'setError'
+          'addError'
         ),
       
-      clearError: () =>
-        set({ error: initialErrorState }, false, 'clearError'),
+      removeError: (errorId) =>
+        set(
+          (state) => {
+            const errors = state.error.errors.filter(e => e.id !== errorId);
+            const currentError = state.error.currentError?.id === errorId 
+              ? errors[errors.length - 1] 
+              : state.error.currentError;
+            
+            return {
+              error: {
+                ...state.error,
+                errors,
+                currentError,
+                hasError: errors.length > 0,
+              },
+            };
+          },
+          false,
+          'removeError'
+        ),
+      
+      setCurrentError: (errorId) =>
+        set(
+          (state) => {
+            const currentError = errorId 
+              ? state.error.errors.find(e => e.id === errorId)
+              : undefined;
+            
+            return {
+              error: {
+                ...state.error,
+                currentError,
+              },
+            };
+          },
+          false,
+          'setCurrentError'
+        ),
+      
+      clearAllErrors: () =>
+        set(
+          (state) => ({
+            error: {
+              ...initialErrorState,
+              errorHistory: state.error.errorHistory, // Preserve history
+            },
+          }),
+          false,
+          'clearAllErrors'
+        ),
+      
+      incrementRetryCount: () =>
+        set(
+          (state) => ({
+            error: {
+              ...state.error,
+              retryCount: state.error.retryCount + 1,
+              lastRetryAt: new Date(),
+            },
+          }),
+          false,
+          'incrementRetryCount'
+        ),
+      
+      resetRetryCount: () =>
+        set(
+          (state) => ({
+            error: {
+              ...state.error,
+              retryCount: 0,
+              lastRetryAt: undefined,
+            },
+          }),
+          false,
+          'resetRetryCount'
+        ),
+      
+      setRecovering: (isRecovering, progress = 0) =>
+        set(
+          (state) => ({
+            error: {
+              ...state.error,
+              isRecovering,
+              recoveryProgress: progress,
+            },
+          }),
+          false,
+          'setRecovering'
+        ),
+      
+      setFallbackMode: (enabled) =>
+        set(
+          (state) => ({
+            error: {
+              ...state.error,
+              fallbackMode: enabled,
+            },
+          }),
+          false,
+          'setFallbackMode'
+        ),
+      
+      preserveState: (stateToPreserve) =>
+        set(
+          (state) => ({
+            error: {
+              ...state.error,
+              preservedState: stateToPreserve,
+            },
+          }),
+          false,
+          'preserveState'
+        ),
+      
+      restoreState: () => {
+        const state = useAppStore.getState();
+        const preservedState = state.error.preservedState;
+        
+        // Clear preserved state after restoration
+        set(
+          (currentState) => ({
+            error: {
+              ...currentState.error,
+              preservedState: undefined,
+            },
+          }),
+          false,
+          'restoreState'
+        );
+        
+        return preservedState;
+      },
+      
+      getErrorById: (errorId) => {
+        const state = useAppStore.getState();
+        return state.error.errors.find(e => e.id === errorId);
+      },
       
       // Utility actions
       reset: () =>

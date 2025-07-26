@@ -3,7 +3,6 @@ import {
   Subject, 
   BehaviorSubject, 
   Observable, 
-  combineLatest,
   EMPTY,
   timer,
   of
@@ -17,7 +16,6 @@ import {
   catchError,
   retry,
   share,
-  startWith,
   tap,
   takeUntil
 } from 'rxjs/operators';
@@ -442,5 +440,4 @@ export const useAnalysisEngine = (config?: Partial<AnalysisConfig>) => {
   return engine;
 };
 
-// Export types and utilities
-export type { AnalysisConfig, AnalysisState };
+// Export types and utilities (AnalysisState already exported above)

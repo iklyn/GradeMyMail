@@ -1,171 +1,201 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ErrorBoundary as ReactErrorBoundary, type FallbackProps } from 'react-error-boundary';
-// import { useAppStore } from '../store';
+import { useAppStore } from '../store';
+import { useErrorHandler } from '../hooks/useErrorHandler';
+import { ErrorDisplay } from './ErrorDisplay';
+import { StatePreservation } from '../utils/errorRecovery';
 
-// Error fallback component for general errors
+// Enhanced error fallback component with recovery features
 const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
-  const handleReset = () => {
-    resetErrorBoundary();
-  };
+  const { handleError, enableFallbackMode, checkSystemHealth } = useErrorHandler();
+  const { preserveState, restoreState } = useAppStore();
 
-  const handleReload = () => {
+  // Convert boundary error to structured error
+  const structuredError = React.useMemo(() => {
+    return handleError(error, { 
+      componentStack: 'Error Boundary',
+      boundaryError: true 
+    });
+  }, [error, handleError]);
+
+  const handleReset = useCallback(async () => {
+    try {
+      // Check system health before reset
+      const isHealthy = await checkSystemHealth();
+      if (!isHealthy) {
+        enableFallbackMode(true);
+      }
+      
+      resetErrorBoundary();
+    } catch (resetError) {
+      console.error('Reset failed:', resetError);
+      window.location.reload();
+    }
+  }, [resetErrorBoundary, checkSystemHealth, enableFallbackMode]);
+
+  const handleFallbackMode = useCallback(() => {
+    enableFallbackMode(true);
+    resetErrorBoundary();
+  }, [enableFallbackMode, resetErrorBoundary]);
+
+  const handleReload = useCallback(() => {
+    // Preserve current state before reload
+    const currentState = {
+      emailContent: useAppStore.getState().emailContent,
+      ui: useAppStore.getState().ui
+    };
+    
+    try {
+      localStorage.setItem('email-analysis-recovery', JSON.stringify({
+        state: currentState,
+        timestamp: Date.now(),
+        reason: 'error-boundary-reload'
+      }));
+    } catch (storageError) {
+      console.warn('Could not preserve state before reload:', storageError);
+    }
+    
     window.location.reload();
-  };
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
-        <div className="mb-4">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-            <svg
-              className="h-6 w-6 text-red-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+      <div className="max-w-lg w-full bg-white rounded-lg shadow-lg p-6">
+        <ErrorDisplay
+          error={structuredError}
+          onRetry={async () => {
+            await handleReset();
+          }}
+          className="mb-6"
+        />
+        
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handleReset}
+              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
+              Try Again
+            </button>
+            
+            <button
+              onClick={handleFallbackMode}
+              className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors"
+            >
+              Safe Mode
+            </button>
           </div>
-        </div>
-        
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">
-          Something went wrong
-        </h2>
-        
-        <p className="text-sm text-gray-600 mb-6">
-          We encountered an unexpected error. Don't worry, your work is safe.
-        </p>
-        
-        {process.env.NODE_ENV === 'development' && (
-          <details className="mb-4 text-left">
-            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-              Error details (development only)
-            </summary>
-            <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto max-h-32">
-              {error.message}
-              {error.stack && `\n\n${error.stack}`}
-            </pre>
-          </details>
-        )}
-        
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={handleReset}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            Try Again
-          </button>
           
           <button
             onClick={handleReload}
-            className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+            className="w-full bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
           >
             Reload Page
           </button>
         </div>
         
-        <p className="mt-4 text-xs text-gray-500">
-          If this problem persists, please refresh the page or contact support.
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// Minimal error fallback for smaller components
-const MinimalErrorFallback: React.FC<FallbackProps> = ({ resetErrorBoundary }) => {
-  return (
-    <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-      <div className="flex items-center">
-        <div className="flex-shrink-0">
-          <svg
-            className="h-5 w-5 text-red-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-red-800">
-            Component Error
-          </h3>
-          <p className="mt-1 text-sm text-red-700">
-            This component encountered an error and couldn't render properly.
+        <div className="mt-6 p-4 bg-blue-50 rounded-md">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">What happened?</h3>
+          <p className="text-xs text-blue-700 mb-3">
+            The application encountered an unexpected error. Your work has been automatically saved and can be recovered.
           </p>
+          <div className="text-xs text-blue-600 space-y-1">
+            <p>• <strong>Try Again:</strong> Attempt to recover and continue normally</p>
+            <p>• <strong>Safe Mode:</strong> Continue with limited functionality</p>
+            <p>• <strong>Reload Page:</strong> Fresh start with state recovery</p>
+          </div>
         </div>
-        <div className="ml-3">
-          <button
-            onClick={resetErrorBoundary}
-            className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
+        
+        {process.env.NODE_ENV === 'development' && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 font-medium">
+              Technical Details (Development)
+            </summary>
+            <div className="mt-2 p-3 bg-gray-100 rounded text-xs font-mono">
+              <div className="mb-2">
+                <strong>Error:</strong> {error.name}
+              </div>
+              <div className="mb-2">
+                <strong>Message:</strong> {error.message}
+              </div>
+              <div>
+                <strong>Stack:</strong>
+                <pre className="mt-1 whitespace-pre-wrap text-red-600 max-h-32 overflow-auto">
+                  {error.stack}
+                </pre>
+              </div>
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );
 };
 
-// Network error fallback
+// Enhanced minimal error fallback for smaller components
+const MinimalErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
+  const { handleError } = useErrorHandler();
+
+  const structuredError = React.useMemo(() => {
+    return handleError(error, { 
+      componentStack: 'Component Error Boundary',
+      boundaryError: true,
+      minimal: true
+    });
+  }, [error, handleError]);
+
+  return (
+    <ErrorDisplay
+      error={structuredError}
+      onRetry={async () => {
+        resetErrorBoundary();
+      }}
+      compact={true}
+      className="my-2"
+    />
+  );
+};
+
+// Enhanced network error fallback
 const NetworkErrorFallback: React.FC<FallbackProps & { onRetry?: () => void }> = ({ 
+  error,
   resetErrorBoundary,
   onRetry 
 }) => {
-  const handleRetry = () => {
-    if (onRetry) {
-      onRetry();
+  const { handleError, checkSystemHealth } = useErrorHandler();
+
+  const structuredError = React.useMemo(() => {
+    return handleError(error, { 
+      componentStack: 'Network Error Boundary',
+      boundaryError: true,
+      networkError: true
+    });
+  }, [error, handleError]);
+
+  const handleRetry = useCallback(async () => {
+    try {
+      // Check system health before retry
+      const isHealthy = await checkSystemHealth();
+      if (!isHealthy) {
+        throw new Error('System health check failed');
+      }
+      
+      if (onRetry) {
+        await onRetry();
+      }
+      resetErrorBoundary();
+    } catch (retryError) {
+      console.error('Network retry failed:', retryError);
+      // Let the error boundary handle the retry failure
     }
-    resetErrorBoundary();
-  };
+  }, [onRetry, resetErrorBoundary, checkSystemHealth]);
 
   return (
-    <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div className="flex items-center">
-        <div className="flex-shrink-0">
-          <svg
-            className="h-6 w-6 text-yellow-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-yellow-800">
-            Connection Problem
-          </h3>
-          <p className="mt-1 text-sm text-yellow-700">
-            We're having trouble connecting to our servers. Please check your internet connection and try again.
-          </p>
-        </div>
-      </div>
-      <div className="mt-4">
-        <button
-          onClick={handleRetry}
-          className="bg-yellow-100 text-yellow-800 px-3 py-2 rounded-md text-sm font-medium hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors"
-        >
-          Try Again
-        </button>
-      </div>
-    </div>
+    <ErrorDisplay
+      error={structuredError}
+      onRetry={handleRetry}
+      className="m-4"
+    />
   );
 };
 

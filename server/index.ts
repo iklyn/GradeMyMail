@@ -5,6 +5,19 @@ import compression from 'compression';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { aiCommunicator } from './ai-communication.js';
+import { 
+  errorHandler, 
+  requestIdMiddleware, 
+  ValidationError, 
+  StorageError,
+  NotFoundError 
+} from './error-handler.js';
+import { 
+  metricsMiddleware, 
+  healthCheckHandler, 
+  metricsHandler 
+} from './monitoring.js';
+import { withRetry, RETRY_CONFIGS } from './retry-logic.js';
 
 // Types for API requests and responses
 interface AnalyzeRequest {
@@ -53,6 +66,12 @@ setInterval(() => {
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Add request ID middleware first
+app.use(requestIdMiddleware);
+
+// Add metrics collection middleware
+app.use(metricsMiddleware);
 
 // Security middleware - Helmet for security headers
 app.use(helmet({
@@ -126,7 +145,7 @@ const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 const createRateLimit = (windowMs: number, max: number, message: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+    const ip = req.ip || req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const now = Date.now();
     
     // Clean up expired entries periodically
@@ -200,122 +219,117 @@ app.use(express.urlencoded({
 // Request validation middleware
 const validateRequest = (requiredFields: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const missingFields = requiredFields.filter(field => {
-      const value = req.body[field];
-      return value === undefined || value === null || value === '';
-    });
-
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `Missing required fields: ${missingFields.join(', ')}`,
-        missingFields,
+    try {
+      const missingFields = requiredFields.filter(field => {
+        const value = req.body[field];
+        return value === undefined || value === null || value === '';
       });
-    }
 
-    // Validate content length for message field
-    if (req.body.message && typeof req.body.message === 'string') {
-      if (req.body.message.length > 50000) { // 50KB limit
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Content too large. Maximum 50,000 characters allowed.',
-        });
+      if (missingFields.length > 0) {
+        throw new ValidationError(
+          `Missing required fields: ${missingFields.join(', ')}`,
+          { missingFields, endpoint: req.path }
+        );
       }
-    }
 
-    next();
+      // Validate content length for message field
+      if (req.body.message && typeof req.body.message === 'string') {
+        if (req.body.message.length > 50000) { // 50KB limit
+          throw new ValidationError(
+            'Content too large. Maximum 50,000 characters allowed.',
+            { contentLength: req.body.message.length, maxLength: 50000 }
+          );
+        }
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
   };
 };
 
 // Security middleware for input sanitization
 const sanitizeInput = (req: Request, res: Response, next: NextFunction) => {
-  if (req.body && typeof req.body === 'object') {
-    // Basic XSS protection - remove script tags and javascript: protocols
-    const sanitize = (obj: any): any => {
-      if (typeof obj === 'string') {
-        return obj
-          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-          .replace(/javascript:/gi, '')
-          .replace(/on\w+\s*=/gi, '');
-      }
-      if (typeof obj === 'object' && obj !== null) {
-        const sanitized: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-          sanitized[key] = sanitize(value);
+  try {
+    if (req.body && typeof req.body === 'object') {
+      // Basic XSS protection - remove script tags and javascript: protocols
+      const sanitize = (obj: any): any => {
+        if (typeof obj === 'string') {
+          return obj
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/javascript:/gi, '')
+            .replace(/on\w+\s*=/gi, '');
         }
-        return sanitized;
-      }
-      return obj;
-    };
-    
-    req.body = sanitize(req.body);
+        if (typeof obj === 'object' && obj !== null) {
+          const sanitized: any = {};
+          for (const [key, value] of Object.entries(obj)) {
+            sanitized[key] = sanitize(value);
+          }
+          return sanitized;
+        }
+        return obj;
+      };
+      
+      req.body = sanitize(req.body);
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 };
 
 app.use(sanitizeInput);
 
-// Error handling middleware
-const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Server Error:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    url: req.url,
-    method: req.method,
-    ip: req.ip,
-    timestamp: new Date().toISOString(),
-  });
+// Remove the old error handler - we'll use the new one from error-handler.ts
 
-  // Handle specific error types
-  if (err.name === 'SyntaxError' && 'body' in err) {
-    return res.status(400).json({
-      error: 'Invalid JSON',
-      message: 'Request body contains invalid JSON.',
-    });
-  }
+// Health check endpoints (no rate limiting)
+app.get('/api/health', healthCheckHandler);
 
-  if (err.name === 'PayloadTooLargeError') {
-    return res.status(413).json({
-      error: 'Payload Too Large',
-      message: 'Request body exceeds maximum size limit.',
-    });
-  }
+// Detailed metrics endpoint
+app.get('/api/metrics', generalRateLimit, metricsHandler);
 
-  // Generic server error
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'An unexpected error occurred.' 
-      : err.message,
-  });
-};
+// Simple health check for load balancers
+app.get('/api/health/simple', (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
-// Health check endpoint (no rate limiting)
-app.get('/api/health', async (req: Request, res: Response) => {
+// Readiness check
+app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {
+    // Check if critical services are available
     const aiHealth = await aiCommunicator.healthCheck();
-    const cacheStats = aiCommunicator.getCacheStats();
+    const isReady = Object.values(aiHealth).some(healthy => healthy);
     
-    res.json({
-      status: 'healthy',
+    if (isReady) {
+      res.status(200).json({ 
+        status: 'ready', 
+        timestamp: new Date().toISOString(),
+        services: aiHealth
+      });
+    } else {
+      res.status(503).json({ 
+        status: 'not ready', 
+        timestamp: new Date().toISOString(),
+        services: aiHealth
+      });
+    }
+  } catch (_error) {
+    res.status(503).json({ 
+      status: 'not ready', 
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      version: process.env.npm_package_version || '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
-      ai: {
-        models: aiHealth,
-        cache: cacheStats,
-      },
-    });
-  } catch (error) {
-    console.error('Health check error:', error);
-    res.status(503).json({
-      status: 'degraded',
-      timestamp: new Date().toISOString(),
-      error: 'AI health check failed',
+      error: 'Service check failed'
     });
   }
+});
+
+// Liveness check
+app.get('/api/health/live', (_req: Request, res: Response) => {
+  res.status(200).json({ 
+    status: 'alive', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Fallback mock functions for when AI models are unavailable
@@ -360,7 +374,7 @@ const mockFixEmail = async (taggedContent: string): Promise<string> => {
 // API Routes
 
 // Analyze email content
-app.post('/api/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response) => {
+app.post('/api/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
     
@@ -369,12 +383,18 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['message']), async (req: 
     let taggedContent: string;
     
     try {
-      // Try optimized AI communicator first
-      taggedContent = await aiCommunicator.analyzeEmail(message);
+      // Try optimized AI communicator with retry logic
+      taggedContent = await withRetry(
+        () => aiCommunicator.analyzeEmail(message),
+        RETRY_CONFIGS.AI_MODEL
+      );
     } catch (aiError) {
       console.warn('🔄 AI communicator failed, falling back to mock:', (aiError as Error).message);
-      // Fallback to mock function
-      taggedContent = await mockAnalyzeEmail(message);
+      // Fallback to mock function with retry
+      taggedContent = await withRetry(
+        () => mockAnalyzeEmail(message),
+        { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+      );
     }
     
     res.json({
@@ -383,16 +403,12 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['message']), async (req: 
       }
     });
   } catch (error) {
-    console.error('Analysis error:', error);
-    res.status(500).json({
-      error: 'Analysis Failed',
-      message: 'Failed to analyze email content. Please try again.',
-    });
+    next(error);
   }
 });
 
 // Fix tagged email content
-app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response) => {
+app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
     
@@ -401,12 +417,18 @@ app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Requ
     let improvements: string;
     
     try {
-      // Try optimized AI communicator first
-      improvements = await aiCommunicator.fixEmail(message);
+      // Try optimized AI communicator with retry logic
+      improvements = await withRetry(
+        () => aiCommunicator.fixEmail(message),
+        RETRY_CONFIGS.AI_MODEL
+      );
     } catch (aiError) {
       console.warn('🔄 AI communicator failed, falling back to mock:', (aiError as Error).message);
-      // Fallback to mock function
-      improvements = await mockFixEmail(message);
+      // Fallback to mock function with retry
+      improvements = await withRetry(
+        () => mockFixEmail(message),
+        { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+      );
     }
     
     res.json({
@@ -415,16 +437,12 @@ app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Requ
       }
     });
   } catch (error) {
-    console.error('Fix error:', error);
-    res.status(500).json({
-      error: 'Fix Failed',
-      message: 'Failed to generate improvements. Please try again.',
-    });
+    next(error);
   }
 });
 
 // Store temporary data
-app.post('/api/store', validateRequest(['payload']), (req: Request<{}, {}, StoreRequest>, res: Response) => {
+app.post('/api/store', validateRequest(['payload']), (req: Request<{}, {}, StoreRequest>, res: Response, next: NextFunction) => {
   try {
     const { payload } = req.body;
     const id = uuidv4();
@@ -437,47 +455,45 @@ app.post('/api/store', validateRequest(['payload']), (req: Request<{}, {}, Store
       expires: now + DATA_TTL,
     };
     
-    temporaryStorage.set(id, storedData);
-    
-    console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes)`);
-    
-    res.json({ id });
-  } catch (error) {
-    console.error('Storage error:', error);
-    res.status(500).json({
-      error: 'Storage Failed',
-      message: 'Failed to store data. Please try again.',
+    // Use retry logic for storage operations
+    withRetry(
+      () => {
+        temporaryStorage.set(id, storedData);
+        return Promise.resolve();
+      },
+      RETRY_CONFIGS.STORAGE
+    ).then(() => {
+      console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes)`);
+      res.json({ id });
+    }).catch((_error) => {
+      throw new StorageError('Failed to store data', { id, payloadSize: JSON.stringify(payload).length });
     });
+  } catch (error) {
+    next(error);
   }
 });
 
 // Load stored data
-app.get('/api/load', (req: Request, res: Response) => {
+app.get('/api/load', (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.query;
     
     if (!id || typeof id !== 'string') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Missing or invalid ID parameter.',
-      });
+      throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
     }
     
     const storedData = temporaryStorage.get(id);
     
     if (!storedData) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Data not found or has expired.',
-      });
+      throw new NotFoundError('Data not found or has expired', { requestedId: id });
     }
     
     // Check if data has expired
     if (Date.now() > storedData.expires) {
       temporaryStorage.delete(id);
-      return res.status(404).json({
-        error: 'Expired',
-        message: 'Data has expired and been removed.',
+      throw new NotFoundError('Data has expired and been removed', { 
+        requestedId: id, 
+        expiredAt: new Date(storedData.expires).toISOString() 
       });
     }
     
@@ -485,16 +501,36 @@ app.get('/api/load', (req: Request, res: Response) => {
     
     res.json(storedData);
   } catch (error) {
-    console.error('Load error:', error);
-    res.status(500).json({
-      error: 'Load Failed',
-      message: 'Failed to load data. Please try again.',
+    next(error);
+  }
+});
+
+// Delete stored data
+app.delete('/api/store', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.query;
+    
+    if (!id || typeof id !== 'string') {
+      throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
+    }
+    
+    const existed = temporaryStorage.has(id);
+    temporaryStorage.delete(id);
+    
+    console.log(`🗑️ Deleted data with ID: ${id} (existed: ${existed})`);
+    
+    res.json({ 
+      success: true, 
+      deleted: existed,
+      id 
     });
+  } catch (error) {
+    next(error);
   }
 });
 
 // Batch analyze endpoint for multiple requests
-app.post('/api/analyze/batch', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response) => {
+app.post('/api/analyze/batch', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
     
@@ -503,16 +539,25 @@ app.post('/api/analyze/batch', aiRateLimit, validateRequest(['message']), async 
     let taggedContent: string;
     
     try {
-      // Try optimized batch processing first
-      taggedContent = await aiCommunicator.batchAnalyzeEmail(message);
+      // Try optimized batch processing with retry logic
+      taggedContent = await withRetry(
+        () => aiCommunicator.batchAnalyzeEmail(message),
+        RETRY_CONFIGS.AI_MODEL
+      );
     } catch (aiError) {
       console.warn('🔄 Batch AI communicator failed, falling back to regular analysis:', (aiError as Error).message);
-      // Fallback to regular analysis
+      // Fallback to regular analysis with retry
       try {
-        taggedContent = await aiCommunicator.analyzeEmail(message);
+        taggedContent = await withRetry(
+          () => aiCommunicator.analyzeEmail(message),
+          RETRY_CONFIGS.AI_MODEL
+        );
       } catch (regularError) {
         console.warn('🔄 Regular AI communicator failed, falling back to mock:', (regularError as Error).message);
-        taggedContent = await mockAnalyzeEmail(message);
+        taggedContent = await withRetry(
+          () => mockAnalyzeEmail(message),
+          { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+        );
       }
     }
     
@@ -522,16 +567,12 @@ app.post('/api/analyze/batch', aiRateLimit, validateRequest(['message']), async 
       }
     });
   } catch (error) {
-    console.error('Batch analysis error:', error);
-    res.status(500).json({
-      error: 'Batch Analysis Failed',
-      message: 'Failed to analyze email content in batch. Please try again.',
-    });
+    next(error);
   }
 });
 
 // Clear AI cache endpoint (admin only)
-app.post('/api/admin/cache/clear', generalRateLimit, (req: Request, res: Response) => {
+app.post('/api/admin/cache/clear', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
   try {
     aiCommunicator.clearCache();
     
@@ -540,16 +581,12 @@ app.post('/api/admin/cache/clear', generalRateLimit, (req: Request, res: Respons
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Cache clear error:', error);
-    res.status(500).json({
-      error: 'Cache Clear Failed',
-      message: 'Failed to clear AI cache. Please try again.',
-    });
+    next(error);
   }
 });
 
 // Get AI cache statistics
-app.get('/api/admin/cache/stats', generalRateLimit, (req: Request, res: Response) => {
+app.get('/api/admin/cache/stats', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
   try {
     const cacheStats = aiCommunicator.getCacheStats();
     
@@ -558,23 +595,27 @@ app.get('/api/admin/cache/stats', generalRateLimit, (req: Request, res: Response
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Cache stats error:', error);
-    res.status(500).json({
-      error: 'Cache Stats Failed',
-      message: 'Failed to retrieve cache statistics. Please try again.',
-    });
+    next(error);
   }
 });
 
 // 404 handler for API routes
-app.use('/api/*', (req: Request, res: Response) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `API endpoint ${req.method} ${req.path} not found.`,
-  });
+app.use('/api/*', (req: Request, res: Response, next: NextFunction) => {
+  const error = new NotFoundError(
+    `API endpoint ${req.method} ${req.path} not found.`,
+    { method: req.method, path: req.path, availableEndpoints: [
+      'GET /api/health',
+      'GET /api/metrics', 
+      'POST /api/analyze',
+      'POST /api/fix',
+      'POST /api/store',
+      'GET /api/load'
+    ]}
+  );
+  next(error);
 });
 
-// Apply error handling middleware
+// Apply enhanced error handling middleware
 app.use(errorHandler);
 
 // Start server

@@ -1,5 +1,13 @@
 import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from 'axios';
 
+// ValidationError class for client-side validation
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
 // API response interfaces
 export interface AnalyzeResponse {
   message: {
@@ -26,12 +34,13 @@ export interface LoadResponse {
 }
 
 // Error types for classification
-export type APIErrorType = 'network' | 'validation' | 'ai' | 'client' | 'server';
+export type APIErrorType = 'network' | 'validation' | 'ai' | 'client' | 'server' | 'storage';
 
 export class APIError extends Error {
   public type: APIErrorType;
   public status?: number;
   public originalError?: Error;
+  public context?: Record<string, any>;
 
   constructor(message: string, type: APIErrorType, status?: number, originalError?: Error) {
     super(message);
@@ -212,54 +221,184 @@ const transformAxiosError = (error: AxiosError): APIError => {
   return new APIError(message || 'An unexpected error occurred.', 'client', status, error);
 };
 
+// Enhanced health check utility
+export const checkAPIHealth = async (): Promise<{ healthy: boolean; details?: any }> => {
+  try {
+    const response = await apiClient.get('/health', { timeout: 5000 });
+    return { 
+      healthy: true, 
+      details: response.data 
+    };
+  } catch (error) {
+    return { 
+      healthy: false, 
+      details: { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+};
+
+// Service status checker
+export const getServiceStatus = async (): Promise<{
+  api: boolean;
+  ai: boolean;
+  storage: boolean;
+}> => {
+  const status = {
+    api: false,
+    ai: false,
+    storage: false
+  };
+
+  try {
+    // Check API health
+    const apiHealth = await checkAPIHealth();
+    status.api = apiHealth.healthy;
+
+    // Check AI service
+    try {
+      await apiClient.post('/analyze', { message: 'health check' }, { timeout: 10000 });
+      status.ai = true;
+    } catch {
+      status.ai = false;
+    }
+
+    // Check storage
+    try {
+      const testData = { test: 'data' };
+      await apiClient.post('/store', { payload: testData }, { timeout: 5000 });
+      status.storage = true;
+    } catch {
+      status.storage = false;
+    }
+  } catch (error) {
+    console.error('Service status check failed:', error);
+  }
+
+  return status;
+};
+
 // Create API client instance
 export const apiClient = createAPIClient();
 
 // API service functions
 export const apiService = {
-  // Analyze email content
+  // Analyze email content with enhanced error handling
   async analyzeEmail(content: string, requestKey = 'analyze'): Promise<AnalyzeResponse> {
     const controller = requestManager.createController(requestKey);
     
     try {
+      // Validate input
+      if (!content || content.trim().length === 0) {
+        throw new APIError('Content cannot be empty', 'validation', 400);
+      }
+      
+      if (content.length > 50000) { // 50KB limit
+        throw new APIError('Content too large. Please reduce the size and try again.', 'validation', 400);
+      }
+
       const response = await withRetry(
         () => apiClient.post<AnalyzeResponse>(
           '/analyze',
           { message: content },
           { signal: controller.signal }
-        )
+        ),
+        {
+          ...defaultRetryConfig,
+          retryCondition: (error: AxiosError) => {
+            // Don't retry validation errors
+            if (error.response?.status === 400) return false;
+            return defaultRetryConfig.retryCondition(error);
+          }
+        }
       );
       
       requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.message?.content) {
+        throw new APIError('Invalid response from analysis service', 'ai', 502);
+      }
+      
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          contentLength: content.length,
+          requestKey,
+          operation: 'analyzeEmail'
+        };
+      }
+      
       throw error;
     }
   },
 
-  // Fix tagged content
+  // Fix tagged content with enhanced error handling
   async fixEmail(taggedContent: string, requestKey = 'fix'): Promise<FixResponse> {
     const controller = requestManager.createController(requestKey);
     
     try {
+      // Validate input
+      if (!taggedContent || taggedContent.trim().length === 0) {
+        throw new APIError('Tagged content cannot be empty', 'validation', 400);
+      }
+
+      // Check if content has valid tags
+      const tagRegex = /<(fluff|spam_words|hard_to_read)>.*?<\/\1>/g;
+      if (!tagRegex.test(taggedContent)) {
+        throw new APIError('No valid tags found in content. Please analyze the content first.', 'validation', 400);
+      }
+
       const response = await withRetry(
         () => apiClient.post<FixResponse>(
           '/fix',
           { message: taggedContent },
           { signal: controller.signal }
-        )
+        ),
+        {
+          ...defaultRetryConfig,
+          retries: 2, // Fewer retries for fix operations
+          retryCondition: (error: AxiosError) => {
+            // Don't retry validation errors or client errors
+            if (error.response?.status && error.response.status < 500) return false;
+            return defaultRetryConfig.retryCondition(error);
+          }
+        }
       );
       
       requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.message?.content) {
+        throw new APIError('Invalid response from fix service', 'ai', 502);
+      }
+      
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          taggedContentLength: taggedContent.length,
+          requestKey,
+          operation: 'fixEmail'
+        };
+      }
+      
       throw error;
     }
   },
 
-  // Store temporary data
+  // Store temporary data with enhanced error handling
   async storeData(payload: {
     fullOriginalText: string;
     fullOriginalHTML: string;
@@ -268,38 +407,102 @@ export const apiService = {
     const controller = requestManager.createController(requestKey);
     
     try {
+      // Validate payload
+      if (!payload.fullOriginalText || !payload.taggedContent) {
+        throw new APIError('Invalid payload: missing required fields', 'validation', 400);
+      }
+
+      // Check payload size
+      const payloadSize = JSON.stringify(payload).length;
+      if (payloadSize > 1000000) { // 1MB limit
+        throw new APIError('Payload too large for storage', 'validation', 413);
+      }
+
       const response = await withRetry(
         () => apiClient.post<StoreResponse>(
           '/store',
           { payload },
           { signal: controller.signal }
-        )
+        ),
+        {
+          ...defaultRetryConfig,
+          retries: 1 // Only retry once for storage operations
+        }
       );
       
       requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.id) {
+        throw new APIError('Invalid response from storage service', 'storage', 502);
+      }
+      
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          payloadSize: JSON.stringify(payload).length,
+          requestKey,
+          operation: 'storeData'
+        };
+      }
+      
       throw error;
     }
   },
 
-  // Load stored data
+  // Load stored data with enhanced error handling
   async loadData(id: string, requestKey = 'load'): Promise<LoadResponse> {
     const controller = requestManager.createController(requestKey);
     
     try {
+      // Validate input
+      if (!id || id.trim().length === 0) {
+        throw new APIError('Data ID cannot be empty', 'validation', 400);
+      }
+
+      // Basic UUID format validation
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new APIError('Invalid data ID format', 'validation', 400);
+      }
+
       const response = await withRetry(
         () => apiClient.get<LoadResponse>(
-          `/load?id=${id}`,
+          `/load?id=${encodeURIComponent(id)}`,
           { signal: controller.signal }
-        )
+        ),
+        {
+          ...defaultRetryConfig,
+          retries: 2 // Moderate retries for load operations
+        }
       );
       
       requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.payload) {
+        throw new APIError('Invalid response from load service', 'storage', 502);
+      }
+      
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          dataId: id,
+          requestKey,
+          operation: 'loadData'
+        };
+      }
+      
       throw error;
     }
   },
@@ -309,14 +512,10 @@ export const apiService = {
   
   // Cancel all requests
   cancelAllRequests: () => requestManager.cancelAllRequests(),
-};
-
-// Health check utility
-export const checkAPIHealth = async (): Promise<boolean> => {
-  try {
-    await apiClient.get('/health', { timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
+  
+  // Enhanced health check
+  checkAPIHealth,
+  
+  // Service status check
+  getServiceStatus,
 };

@@ -2,15 +2,15 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
 import RichTextEditor from '../RichTextEditor';
 
-// Mock file for testing
-const createMockFile = (name: string, type: string, size: number = 1024) => {
-  const file = new File(['test content'], name, { type });
-  Object.defineProperty(file, 'size', { value: size });
-  return file;
-};
+// Mock file for testing (currently unused but may be needed for future tests)
+// const createMockFile = (name: string, type: string, size: number = 1024) => {
+//   const file = new File(['test content'], name, { type });
+//   Object.defineProperty(file, 'size', { value: size });
+//   return file;
+// };
 
 describe('RichTextEditor Newsletter Writing Features', () => {
 

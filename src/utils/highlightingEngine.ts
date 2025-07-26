@@ -3,7 +3,6 @@
 import type { 
   HighlightRange, 
   HighlightPosition, 
-  HighlightColors, 
   AnimationState, 
   HighlightingConfig,
   HighlightingState,
@@ -43,47 +42,11 @@ const EASING_FUNCTIONS = {
   easeOutQuart: (t: number): number => 1 - Math.pow(1 - t, 4),
 };
 
-// Text measurement utilities
-class TextMeasurer {
-  private canvas: HTMLCanvasElement;
-  private context: CanvasRenderingContext2D;
-  private measurementCache = new Map<string, TextMetrics>();
-
-  constructor() {
-    this.canvas = document.createElement('canvas');
-    this.context = this.canvas.getContext('2d')!;
-  }
-
-  // Measure text with caching for performance
-  measureText(text: string, font: string): TextMetrics {
-    const cacheKey = `${text}|${font}`;
-    
-    if (this.measurementCache.has(cacheKey)) {
-      return this.measurementCache.get(cacheKey)!;
-    }
-
-    this.context.font = font;
-    const metrics = this.context.measureText(text);
-    
-    // Cache with LRU eviction
-    if (this.measurementCache.size > 1000) {
-      const firstKey = this.measurementCache.keys().next().value;
-      this.measurementCache.delete(firstKey);
-    }
-    
-    this.measurementCache.set(cacheKey, metrics);
-    return metrics;
-  }
-
-  // Clear cache
-  clearCache(): void {
-    this.measurementCache.clear();
-  }
-}
+// Text measurement utilities (removed unused TextMeasurer class)
 
 // Range-to-position calculator
 class PositionCalculator {
-  private textMeasurer = new TextMeasurer();
+  // Text measurement functionality removed (was unused)
 
   // Calculate highlight positions from text ranges
   calculatePositions(
@@ -123,10 +86,10 @@ class PositionCalculator {
 
   private calculateSinglePosition(
     range: HighlightRange,
-    textContent: string,
+    _textContent: string,
     containerElement: HTMLElement,
     containerRect: DOMRect,
-    font: string,
+    _font: string,
     lineHeight: number
   ): HighlightPosition | null {
     // Use Range API for precise text positioning
@@ -254,7 +217,7 @@ class CanvasRenderer {
     }
     
     // For the last highlight, calculate partial progress
-    const baseProgress = (index / Math.max(1, totalShown - 1));
+    // const _baseProgress = (index / Math.max(1, totalShown - 1));
     return Math.min(1, animationState.progress * totalShown - index);
   }
 
@@ -424,7 +387,7 @@ export class HighlightingEngineImpl implements HighlightingEngine {
     let plainTextOffset = 0;
 
     // Create plain text version and track ranges
-    let plainText = taggedContent;
+    // let _plainText = taggedContent;
     const tagMatches: Array<{ type: string; text: string; start: number; end: number }> = [];
 
     while ((match = tagRegex.exec(taggedContent)) !== null) {
@@ -437,7 +400,7 @@ export class HighlightingEngineImpl implements HighlightingEngine {
     }
 
     // Remove tags and calculate positions in plain text
-    plainText = taggedContent.replace(tagRegex, '$2');
+    // const plainText = taggedContent.replace(tagRegex, '$2');
     
     let currentOffset = 0;
     for (const tagMatch of tagMatches) {

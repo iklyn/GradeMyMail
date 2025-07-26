@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback } from 'react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 import { HighlightOverlay } from './HighlightOverlay';
 import { HighlightLegend } from './HighlightLegend';
-import { SkeletonLoader, ProgressIndicator } from './LoadingStates';
+import { SkeletonLoader } from './LoadingStates';
 import { NotificationProvider, useNotifications } from './Notifications';
 import { useHighlighting } from '../hooks/useHighlighting';
 import type { HighlightRange } from '../types/highlighting';
@@ -108,8 +108,9 @@ const HighlightingDemoContent: React.FC = () => {
           label: 'Retry',
           onClick: () => {
             if (editorRef.current) {
-              const content = editorRef.current.getContent();
-              updateContent(content.html, content.text);
+              const html = editorRef.current.getHTML();
+              const text = editorRef.current.getPlainText();
+              updateContent(html, text);
             }
           },
         },
@@ -193,13 +194,10 @@ const HighlightingDemoContent: React.FC = () => {
       {/* Analysis Progress */}
       {isAnalyzing && (
         <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-          <ProgressIndicator
-            progress={getAnalysisProgress()}
-            label="Analyzing content..."
-            color="blue"
-            showPercentage={true}
-            animated={true}
-          />
+          <div className="text-center">
+            <div className="text-lg font-medium">Analyzing content...</div>
+            <div className="text-sm text-gray-600">{Math.round(getAnalysisProgress() * 100)}%</div>
+          </div>
         </div>
       )}
 
@@ -250,12 +248,7 @@ const HighlightingDemoContent: React.FC = () => {
       <div className="flex items-center justify-center space-x-4">
         {isAnalyzing && (
           <div className="flex items-center space-x-3 text-blue-600 dark:text-blue-400">
-            <ProgressIndicator
-              progress={getAnalysisProgress()}
-              variant="circular"
-              size="sm"
-              color="blue"
-            />
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm font-medium">Analyzing content...</span>
           </div>
         )}
@@ -294,12 +287,14 @@ const HighlightingDemoContent: React.FC = () => {
           {isAnalyzing && (
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/20 z-10 flex items-center justify-center">
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                <ProgressIndicator
-                  progress={getAnalysisProgress()}
-                  variant="dots"
-                  color="blue"
-                  label="Analyzing..."
-                />
+                <div className="text-center">
+                  <div className="flex space-x-1 justify-center mb-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  </div>
+                  <div className="text-sm">Analyzing...</div>
+                </div>
               </div>
             </div>
           )}

@@ -9,7 +9,7 @@ interface HighlightOverlayProps {
   ranges?: HighlightRange[];
   
   // Container element reference
-  containerRef: React.RefObject<HTMLElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   
   // Configuration
   config?: Partial<HighlightingConfig>;
@@ -85,7 +85,7 @@ export const HighlightOverlay: React.FC<HighlightOverlayProps> = ({
     let plainTextOffset = 0;
 
     // Create plain text version and track ranges
-    let plainText = taggedContent;
+    // let _plainText = taggedContent;
     const tagMatches: Array<{ type: string; text: string; start: number; end: number }> = [];
 
     while ((match = tagRegex.exec(taggedContent)) !== null) {
@@ -98,7 +98,7 @@ export const HighlightOverlay: React.FC<HighlightOverlayProps> = ({
     }
 
     // Remove tags and calculate positions in plain text
-    plainText = taggedContent.replace(tagRegex, '$2');
+    // const plainText = taggedContent.replace(tagRegex, '$2');
     
     let currentOffset = 0;
     for (const tagMatch of tagMatches) {

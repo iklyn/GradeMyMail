@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import type { HighlightColors } from '../../types/highlighting';
 import { Tooltip } from '../Tooltip';
 

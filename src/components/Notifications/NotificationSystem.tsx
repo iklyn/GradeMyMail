@@ -55,7 +55,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     });
 
     // Auto-remove non-persistent notifications
-    if (!newNotification.persistent && newNotification.duration > 0) {
+    if (!newNotification.persistent && newNotification.duration && newNotification.duration > 0) {
       setTimeout(() => {
         removeNotification(id);
       }, newNotification.duration);

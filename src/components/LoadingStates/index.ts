@@ -1,2 +1,2 @@
 export { SkeletonLoader } from './SkeletonLoader';
-export { ProgressIndicator } from './ProgressIndicator';
+// export { ProgressIndicator } from './ProgressIndicator'; // File doesn't exist

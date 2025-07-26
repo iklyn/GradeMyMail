@@ -1,5 +1,8 @@
 import { Agent } from 'http';
 import axios, { AxiosInstance } from 'axios';
+import { withRetry, RETRY_CONFIGS, circuitBreakers } from './retry-logic.js';
+import { AIModelError, NetworkError, TimeoutError } from './error-handler.js';
+import { metricsCollector, logPerformance } from './monitoring.js';
 
 // Types for AI model communication
 interface OllamaRequest {
@@ -28,8 +31,8 @@ interface BatchRequest {
 
 // Configuration for AI models
 const AI_CONFIG = {
-  GMM_MODEL: 'grademymail',
-  FMM_MODEL: 'fixmymail',
+  GMM_MODEL: 'GMM',
+  FMM_MODEL: 'FMM',
   GMM_PORT: 11434,
   FMM_PORT: 11435,
   TIMEOUT: 30000, // 30 seconds
@@ -157,8 +160,7 @@ class AIModelCommunicator {
   private async makeOllamaRequest(
     client: AxiosInstance,
     model: string,
-    prompt: string,
-    retries: number = AI_CONFIG.MAX_RETRIES
+    prompt: string
   ): Promise<string> {
     const request: OllamaRequest = {
       model,
@@ -166,31 +168,66 @@ class AIModelCommunicator {
       stream: false,
     };
 
+    const startTime = performance.now();
+    let success = false;
+
     try {
-      const response = await client.post<OllamaResponse>('/api/generate', request);
-      
-      if (response.status !== 200) {
-        throw new Error(`Ollama API returned status ${response.status}`);
-      }
+      const result = await circuitBreakers.aiModel.execute(async () => {
+        return await withRetry(async () => {
+          const response = await client.post<OllamaResponse>('/api/generate', request);
+          
+          if (response.status !== 200) {
+            throw new AIModelError(`Ollama API returned status ${response.status}`, {
+              status: response.status,
+              model,
+              endpoint: client.defaults.baseURL
+            });
+          }
 
-      if (!response.data.response) {
-        throw new Error('Empty response from Ollama API');
-      }
+          if (!response.data.response) {
+            throw new AIModelError('Empty response from Ollama API', {
+              model,
+              endpoint: client.defaults.baseURL
+            });
+          }
 
-      return response.data.response.trim();
+          return response.data.response.trim();
+        }, RETRY_CONFIGS.AI_MODEL);
+      });
+
+      success = true;
+      return result;
     } catch (error: any) {
-      console.error(`🚨 Ollama request failed (${retries} retries left):`, error.message);
-      
-      if (retries > 0) {
-        // Exponential backoff
-        const delay = AI_CONFIG.RETRY_DELAY * (AI_CONFIG.MAX_RETRIES - retries + 1);
-        console.log(`⏳ Retrying in ${delay}ms...`);
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.makeOllamaRequest(client, model, prompt, retries - 1);
+      // Classify and throw appropriate error
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        throw new NetworkError(`Failed to connect to AI model: ${error.message}`, {
+          code: error.code,
+          model,
+          endpoint: client.defaults.baseURL
+        });
       }
       
-      throw new Error(`AI model communication failed: ${error.message}`);
+      if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+        throw new TimeoutError(`AI model request timed out: ${error.message}`, {
+          model,
+          endpoint: client.defaults.baseURL,
+          timeout: AI_CONFIG.TIMEOUT
+        });
+      }
+
+      if (error instanceof AIModelError || error instanceof NetworkError || error instanceof TimeoutError) {
+        throw error;
+      }
+
+      throw new AIModelError(`AI model communication failed: ${error.message}`, {
+        originalError: error.name,
+        model,
+        endpoint: client.defaults.baseURL
+      });
+    } finally {
+      const duration = performance.now() - startTime;
+      metricsCollector.recordAIRequest(success, duration);
+      logPerformance(`AI_${model}`, duration, success, { model, promptLength: prompt.length });
     }
   }
 

@@ -2,8 +2,8 @@ import React, { useRef, useState, useCallback } from 'react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 import { HighlightOverlay } from './HighlightOverlay';
 import { HighlightLegend } from './HighlightLegend';
-import { SkeletonLoader, ProgressIndicator } from './LoadingStates';
-import { NotificationProvider, useNotifications } from './Notifications';
+// import { SkeletonLoader, ProgressIndicator } from './LoadingStates';
+// import { NotificationProvider, useNotifications } from './Notifications';
 import { useHighlighting } from '../hooks/useHighlighting';
 import type { HighlightRange } from '../types/highlighting';
 
@@ -30,7 +30,7 @@ export const HighlightingDemo: React.FC = () => {
   // Initialize highlighting system
   const {
     ranges,
-    taggedContent,
+    taggedContent: _taggedContent,
     isAnalyzing,
     updateContent,
     clearHighlights,

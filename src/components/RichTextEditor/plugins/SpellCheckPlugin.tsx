@@ -21,6 +21,8 @@ export default function SpellCheckPlugin({
   const [editor] = useLexicalComposerContext();
   const [spellingErrors, setSpellingErrors] = useState<SpellingError[]>([]);
 
+  console.log('SpellCheckPlugin: Initialized with enabled:', enabled, 'callback:', !!onSpellingSuggestion);
+
   // Simple spell check implementation using browser's built-in capabilities
   const checkSpelling = useCallback(async (text: string): Promise<SpellingError[]> => {
     if (!enabled || !text.trim()) return [];
@@ -119,26 +121,55 @@ export default function SpellCheckPlugin({
   //   });
   // }, [editor, onSpellingSuggestion]);
 
-  // Check spelling on content change
+  // Check spelling on content change with debouncing
   useEffect(() => {
     if (!enabled) return;
 
+    let timeoutId: NodeJS.Timeout;
+
     const unregister = editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(async () => {
-        const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
-        const errors = await checkSpelling(textContent);
-        setSpellingErrors(errors);
-        
-        // Notify parent component about spelling issues
-        if (errors.length > 0 && onSpellingSuggestion) {
-          errors.forEach(error => {
-            onSpellingSuggestion(error.word, error.suggestions);
-          });
-        }
-      });
+      // Clear previous timeout
+      clearTimeout(timeoutId);
+      
+      // Debounce the spell check to avoid excessive calls
+      timeoutId = setTimeout(() => {
+        editorState.read(async () => {
+          try {
+            const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
+            console.log('SpellCheck: Checking text:', textContent.substring(0, 50) + '...');
+            
+            if (textContent.trim()) {
+              const errors = await checkSpelling(textContent);
+              console.log('SpellCheck: Found errors:', errors);
+              setSpellingErrors(errors);
+              
+              // Notify parent component about spelling issues
+              if (onSpellingSuggestion) {
+                // Only send unique errors to avoid duplicates
+                const uniqueErrors = errors.filter((error, index, self) => 
+                  index === self.findIndex(e => e.word.toLowerCase() === error.word.toLowerCase())
+                );
+                
+                console.log('SpellCheck: Sending unique errors:', uniqueErrors);
+                uniqueErrors.forEach(error => {
+                  console.log('SpellCheck: Calling callback for:', error.word, error.suggestions);
+                  onSpellingSuggestion(error.word, error.suggestions);
+                });
+              } else {
+                console.log('SpellCheck: No callback provided');
+              }
+            }
+          } catch (error) {
+            console.warn('Spell check error:', error);
+          }
+        });
+      }, 500); // 500ms debounce
     });
 
-    return unregister;
+    return () => {
+      clearTimeout(timeoutId);
+      unregister();
+    };
   }, [editor, enabled, checkSpelling, onSpellingSuggestion]);
 
   // Add context menu for spelling suggestions
@@ -176,10 +207,19 @@ export function GrammarCheckPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
 
+  console.log('GrammarCheckPlugin: Initialized with enabled:', enabled, 'callback:', !!onGrammarIssue);
+
   useEffect(() => {
     if (!enabled) return;
 
+    let timeoutId: NodeJS.Timeout;
+    let lastCheckedText = '';
+
     const checkGrammar = (text: string) => {
+      // Skip if text hasn't changed
+      if (text === lastCheckedText) return;
+      lastCheckedText = text;
+
       // Basic grammar rules for demo
       const grammarIssues = [];
       
@@ -214,20 +254,38 @@ export function GrammarCheckPlugin({
         }
       }
       
-      if (grammarIssues.length > 0) {
-        console.log('Grammar issues:', grammarIssues);
-        onGrammarIssue?.(grammarIssues);
+      // Always call the callback, even with empty array
+      console.log('GrammarCheck: Found issues:', grammarIssues);
+      if (onGrammarIssue) {
+        console.log('GrammarCheck: Calling callback with issues:', grammarIssues);
+        onGrammarIssue(grammarIssues);
+      } else {
+        console.log('GrammarCheck: No callback provided');
       }
     };
 
     const unregister = editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
-        const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
-        checkGrammar(textContent);
-      });
+      // Clear previous timeout
+      clearTimeout(timeoutId);
+      
+      // Debounce the grammar check
+      timeoutId = setTimeout(() => {
+        editorState.read(() => {
+          try {
+            const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
+            console.log('GrammarCheck: Checking text:', textContent.substring(0, 50) + '...');
+            checkGrammar(textContent);
+          } catch (error) {
+            console.warn('Grammar check error:', error);
+          }
+        });
+      }, 750); // 750ms debounce for grammar (slightly longer)
     });
 
-    return unregister;
+    return () => {
+      clearTimeout(timeoutId);
+      unregister();
+    };
   }, [editor, enabled, onGrammarIssue]);
 
   return null;

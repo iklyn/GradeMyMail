@@ -25,23 +25,49 @@ const RichTextEditorDemo: React.FC = () => {
 
 
   const handleSpellingSuggestion = useCallback((word: string, suggestions: string[]) => {
+    console.log('RichTextEditorDemo: Received spelling suggestion:', word, suggestions);
+    
     const suggestionText = suggestions.length > 0 
       ? `"${word}" -> ${suggestions.join(', ')}` 
       : `"${word}" (no suggestions)`;
     
     setSpellingIssues(prev => {
-      // Avoid duplicates
-      if (!prev.includes(suggestionText)) {
-        return [...prev.slice(-9), suggestionText]; // Keep last 10 issues
+      // Create a unique key for this word to avoid duplicates
+      const wordKey = word.toLowerCase();
+      const existingIndex = prev.findIndex(item => item.startsWith(`"${wordKey}"`));
+      
+      if (existingIndex >= 0) {
+        // Replace existing entry
+        const newArray = [...prev];
+        newArray[existingIndex] = suggestionText;
+        console.log('RichTextEditorDemo: Updated existing spelling issue');
+        return newArray;
+      } else {
+        // Add new entry, keep last 10
+        const newArray = [...prev.slice(-9), suggestionText];
+        console.log('RichTextEditorDemo: Added new spelling issue');
+        return newArray;
       }
-      return prev;
     });
   }, []);
 
   const handleGrammarIssue = useCallback((issues: string[]) => {
+    console.log('RichTextEditorDemo: Received grammar issues:', issues);
+    
     setGrammarIssues(prev => {
-      const newIssues = issues.filter(issue => !prev.includes(issue));
-      return [...prev.slice(-7), ...newIssues].slice(-10); // Keep last 10 issues
+      // Only update if issues have actually changed
+      const currentIssuesSet = new Set(prev);
+      const newIssuesSet = new Set(issues);
+      
+      // Check if sets are different
+      if (currentIssuesSet.size !== newIssuesSet.size || 
+          [...currentIssuesSet].some(issue => !newIssuesSet.has(issue))) {
+        console.log('RichTextEditorDemo: Grammar issues changed, updating');
+        return issues.slice(-10); // Keep last 10 issues
+      }
+      
+      console.log('RichTextEditorDemo: Grammar issues unchanged');
+      return prev; // No change needed
     });
   }, []);
 
@@ -127,6 +153,8 @@ const RichTextEditorDemo: React.FC = () => {
           onClick={() => {
             setSpellingIssues([]);
             setGrammarIssues([]);
+            setAnnouncements([]);
+            console.log('Cleared all issues and announcements');
           }}
           className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
         >
@@ -161,7 +189,7 @@ const RichTextEditorDemo: React.FC = () => {
       <div className="border border-gray-300 rounded-lg overflow-hidden">
         <RichTextEditor
           ref={editorRef}
-          placeholder="Start writing your newsletter content here... Try typing misspelled words like 'teh', 'recieve', 'seperate' to see spell check in action!"
+          placeholder="Start writing your newsletter content here... Try typing misspelled words like 'teh', 'recieve', 'seperate' to see spell check in action! Use Ctrl+B for bold, Ctrl+I for italic."
           onChange={handleChange}
           onValidationChange={handleValidationChange}
           onSpellingSuggestion={handleSpellingSuggestion}
@@ -220,7 +248,14 @@ const RichTextEditorDemo: React.FC = () => {
 
           {/* Spelling Issues */}
           <div>
-            <h3 className="text-lg font-semibold mb-2">Spelling Suggestions:</h3>
+            <h3 className="text-lg font-semibold mb-2 flex items-center">
+              Spelling Suggestions:
+              {advancedFeaturesEnabled && (
+                <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                  Active
+                </span>
+              )}
+            </h3>
             <div className="bg-gray-50 p-3 rounded text-sm max-h-32 overflow-auto">
               {spellingIssues.length > 0 ? (
                 <ul className="space-y-1">
@@ -230,15 +265,28 @@ const RichTextEditorDemo: React.FC = () => {
                     </li>
                   ))}
                 </ul>
+              ) : advancedFeaturesEnabled ? (
+                <div className="text-gray-500">
+                  No spelling issues detected. Try typing: "teh", "recieve", "seperate"
+                </div>
               ) : (
-                'No spelling issues detected...'
+                <div className="text-gray-400">
+                  Enable Advanced Features to see spelling suggestions
+                </div>
               )}
             </div>
           </div>
 
           {/* Grammar Issues */}
           <div>
-            <h3 className="text-lg font-semibold mb-2">Grammar Issues:</h3>
+            <h3 className="text-lg font-semibold mb-2 flex items-center">
+              Grammar Issues:
+              {advancedFeaturesEnabled && (
+                <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                  Active
+                </span>
+              )}
+            </h3>
             <div className="bg-gray-50 p-3 rounded text-sm max-h-32 overflow-auto">
               {grammarIssues.length > 0 ? (
                 <ul className="space-y-1">
@@ -248,8 +296,14 @@ const RichTextEditorDemo: React.FC = () => {
                     </li>
                   ))}
                 </ul>
+              ) : advancedFeaturesEnabled ? (
+                <div className="text-gray-500">
+                  No grammar issues detected. Try typing: "this  is" (double space) or "this this"
+                </div>
               ) : (
-                'No grammar issues detected...'
+                <div className="text-gray-400">
+                  Enable Advanced Features to see grammar suggestions
+                </div>
               )}
             </div>
           </div>

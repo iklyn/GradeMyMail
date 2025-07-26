@@ -104,7 +104,7 @@ export const useHighlighting = (options: UseHighlightingOptions = {}): UseHighli
     let plainTextOffset = 0;
 
     // Create plain text version and track ranges
-    let plainText = taggedContent;
+    // let _plainText = taggedContent;
     const tagMatches: Array<{ type: string; text: string; start: number; end: number }> = [];
 
     while ((match = tagRegex.exec(taggedContent)) !== null) {
@@ -117,7 +117,7 @@ export const useHighlighting = (options: UseHighlightingOptions = {}): UseHighli
     }
 
     // Remove tags and calculate positions in plain text
-    plainText = taggedContent.replace(tagRegex, '$2');
+    // const plainText = taggedContent.replace(tagRegex, '$2');
     
     let currentOffset = 0;
     for (const tagMatch of tagMatches) {
@@ -234,14 +234,14 @@ export const useHighlighting = (options: UseHighlightingOptions = {}): UseHighli
     setShowLegend(prev => !prev);
   }, []);
 
-  // Stable event handlers
-  const handleHighlightClick = useCallback((range: HighlightRange) => {
-    onHighlightClickRef.current?.(range);
-  }, []);
+  // Stable event handlers (commented out as unused)
+  // const _handleHighlightClick = useCallback((range: HighlightRange) => {
+  //   onHighlightClickRef.current?.(range);
+  // }, []);
 
-  const handleHighlightHover = useCallback((range: HighlightRange | null) => {
-    onHighlightHoverRef.current?.(range);
-  }, []);
+  // const _handleHighlightHover = useCallback((range: HighlightRange | null) => {
+  //   onHighlightHoverRef.current?.(range);
+  // }, []);
 
   // Cleanup on unmount
   useEffect(() => {
