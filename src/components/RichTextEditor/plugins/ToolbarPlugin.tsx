@@ -222,33 +222,11 @@ const ToolbarPlugin: React.FC = () => {
 
   return (
     <div className="toolbar">
-      {/* Undo/Redo */}
-      <button
-        onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}
-        disabled={!canUndo}
-        className="toolbar-item"
-        title="Undo (Ctrl+Z)"
-        aria-label="Undo"
-      >
-        ↶
-      </button>
-      <button
-        onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
-        disabled={!canRedo}
-        className="toolbar-item"
-        title="Redo (Ctrl+Y)"
-        aria-label="Redo"
-      >
-        ↷
-      </button>
-
-      <div className="divider" />
-
-      {/* Text Formatting */}
+      {/* Essential text formatting only */}
       <button
         onClick={() => formatText('bold')}
         className={`toolbar-item ${isBold ? 'active' : ''}`}
-        title="Bold (Ctrl+B)"
+        title="Bold (⌘B)"
         aria-label="Bold"
       >
         <strong>B</strong>
@@ -256,59 +234,35 @@ const ToolbarPlugin: React.FC = () => {
       <button
         onClick={() => formatText('italic')}
         className={`toolbar-item ${isItalic ? 'active' : ''}`}
-        title="Italic (Ctrl+I)"
+        title="Italic (⌘I)"
         aria-label="Italic"
       >
         <em>I</em>
       </button>
-      <button
-        onClick={() => formatText('underline')}
-        className={`toolbar-item ${isUnderline ? 'active' : ''}`}
-        title="Underline (Ctrl+U)"
-        aria-label="Underline"
-      >
-        <u>U</u>
-      </button>
-      <button
-        onClick={() => formatText('strikethrough')}
-        className={`toolbar-item ${isStrikethrough ? 'active' : ''}`}
-        title="Strikethrough"
-        aria-label="Strikethrough"
-      >
-        <s>S</s>
-      </button>
 
       <div className="divider" />
 
-      {/* Headings */}
+      {/* Essential headings */}
       <button
         onClick={() => formatHeading('h1')}
         className={`toolbar-item ${blockType === 'h1' ? 'active' : ''}`}
-        title="Heading 1"
-        aria-label="Heading 1"
+        title="Heading"
+        aria-label="Heading"
       >
         H1
       </button>
       <button
         onClick={() => formatHeading('h2')}
         className={`toolbar-item ${blockType === 'h2' ? 'active' : ''}`}
-        title="Heading 2"
-        aria-label="Heading 2"
+        title="Subheading"
+        aria-label="Subheading"
       >
         H2
-      </button>
-      <button
-        onClick={() => formatHeading('h3')}
-        className={`toolbar-item ${blockType === 'h3' ? 'active' : ''}`}
-        title="Heading 3"
-        aria-label="Heading 3"
-      >
-        H3
       </button>
 
       <div className="divider" />
 
-      {/* Lists */}
+      {/* Essential lists */}
       <button
         onClick={formatBulletList}
         className={`toolbar-item ${blockType === 'bullet' ? 'active' : ''}`}
@@ -328,26 +282,6 @@ const ToolbarPlugin: React.FC = () => {
 
       <div className="divider" />
 
-      {/* Quote and Code */}
-      <button
-        onClick={formatQuote}
-        className={`toolbar-item ${blockType === 'quote' ? 'active' : ''}`}
-        title="Quote"
-        aria-label="Quote"
-      >
-        "
-      </button>
-      <button
-        onClick={() => formatText('code')}
-        className={`toolbar-item ${isCode ? 'active' : ''}`}
-        title="Inline Code"
-        aria-label="Inline Code"
-      >
-        &lt;/&gt;
-      </button>
-
-      <div className="divider" />
-
       {/* Link */}
       <button
         onClick={insertLink}
@@ -356,34 +290,6 @@ const ToolbarPlugin: React.FC = () => {
         aria-label="Add Link"
       >
         🔗
-      </button>
-
-      <div className="divider" />
-
-      {/* Text Alignment */}
-      <button
-        onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')}
-        className="toolbar-item"
-        title="Align Left"
-        aria-label="Align Left"
-      >
-        ⬅
-      </button>
-      <button
-        onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center')}
-        className="toolbar-item"
-        title="Align Center"
-        aria-label="Align Center"
-      >
-        ↔
-      </button>
-      <button
-        onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right')}
-        className="toolbar-item"
-        title="Align Right"
-        aria-label="Align Right"
-      >
-        ➡
       </button>
     </div>
   );

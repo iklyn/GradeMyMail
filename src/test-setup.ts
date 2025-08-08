@@ -1,4 +1,23 @@
 import '@testing-library/jest-dom';
+import { vi, beforeEach, afterEach } from 'vitest';
+
+// Enhanced Jest-compatible matchers for Vitest
+expect.extend({
+  toBeInTheDocument: (received) => {
+    const pass = received && document.body.contains(received);
+    return {
+      message: () => `expected element ${pass ? 'not ' : ''}to be in the document`,
+      pass,
+    };
+  },
+  toHaveTextContent: (received, expected) => {
+    const pass = received && received.textContent && received.textContent.includes(expected);
+    return {
+      message: () => `expected element ${pass ? 'not ' : ''}to have text content "${expected}"`,
+      pass,
+    };
+  },
+});
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
@@ -103,3 +122,79 @@ global.getSelection = () => new Selection();
 
 // Mock document.createRange
 document.createRange = () => new Range();
+
+// Mock fetch for API testing
+global.fetch = vi.fn();
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+global.localStorage = localStorageMock;
+
+// Mock sessionStorage
+const sessionStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+global.sessionStorage = sessionStorageMock;
+
+// Mock matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
+// Mock requestAnimationFrame
+global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 16));
+global.cancelAnimationFrame = vi.fn();
+
+// Mock HTMLCanvasElement
+HTMLCanvasElement.prototype.getContext = vi.fn();
+
+// Mock URL.createObjectURL
+global.URL.createObjectURL = vi.fn(() => 'mocked-url');
+global.URL.revokeObjectURL = vi.fn();
+
+// Mock clipboard API
+Object.assign(navigator, {
+  clipboard: {
+    writeText: vi.fn(() => Promise.resolve()),
+    readText: vi.fn(() => Promise.resolve('')),
+  },
+});
+
+// Mock performance API
+global.performance = {
+  ...global.performance,
+  now: vi.fn(() => Date.now()),
+  mark: vi.fn(),
+  measure: vi.fn(),
+  getEntriesByName: vi.fn(() => []),
+  getEntriesByType: vi.fn(() => []),
+  clearMarks: vi.fn(),
+  clearMeasures: vi.fn(),
+};
+
+// Mock ClipboardEvent
+global.ClipboardEvent = class ClipboardEvent extends Event {
+  clipboardData: any;
+  constructor(type: string, eventInitDict?: any) {
+    super(type, eventInitDict);
+    this.clipboardData = eventInitDict?.clipboardData || null;
+  }
+};

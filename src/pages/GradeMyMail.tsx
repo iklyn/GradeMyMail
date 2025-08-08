@@ -1,43 +1,95 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import RichTextEditor from '../components/RichTextEditor/RichTextEditor';
-import { useRealTimeAnalysis } from '../hooks/useRealTimeAnalysis';
-import { NavigationManager, NavigationState } from '../utils/navigationUtils';
-import { EmailData } from '../utils/stateTransfer';
+import { HighlightOverlay } from '../components/HighlightOverlay/HighlightOverlay';
+import { NavigationManager, type NavigationState } from '../utils/navigationUtils';
+import { type EmailData } from '../utils/stateTransfer';
 import { useErrorHandler } from '../hooks/useErrorHandler';
-import { ErrorDisplay, ErrorToast } from '../components/ErrorDisplay';
 import { StatePreservation } from '../utils/errorRecovery';
-import { useAppStore } from '../store';
+import { MinimalPulsePopup } from '../components/LoadingScreen/MinimalLoadingPopup';
+// import { apiService } from '../services/api'; // Temporarily disabled for UI testing
+
+// Helper function to extract issues from tagged content
+const extractIssuesFromTaggedContent = (content: string) => {
+  const issues: Record<string, number> = {};
+  const issueTypes = ['fluff', 'spam_words', 'hard_to_read'];
+  
+  issueTypes.forEach(type => {
+    const regex = new RegExp(`<${type}>(.*?)</${type}>`, 'g');
+    const matches = [...content.matchAll(regex)];
+    if (matches.length > 0) {
+      issues[type] = matches.length;
+    }
+  });
+  
+  return issues;
+};
+
+// Component to display analysis results summary - Minimal version
+const AnalysisResultsSummary: React.FC<{ taggedContent: string }> = ({ taggedContent }) => {
+  const issueTypes = {
+    fluff: { label: 'Clarity', color: 'text-red-600' },
+    spam_words: { label: 'Engagement', color: 'text-yellow-600' },
+    hard_to_read: { label: 'Tone', color: 'text-green-600' },
+  };
+
+  const extractIssues = (content: string) => {
+    const issues: Array<{ type: keyof typeof issueTypes; count: number }> = [];
+    
+    Object.keys(issueTypes).forEach(type => {
+      const regex = new RegExp(`<${type}>(.*?)</${type}>`, 'g');
+      const matches = [...content.matchAll(regex)];
+      
+      if (matches.length > 0) {
+        issues.push({
+          type: type as keyof typeof issueTypes,
+          count: matches.length
+        });
+      }
+    });
+    
+    return issues;
+  };
+
+  const issues = extractIssues(taggedContent);
+
+  if (issues.length === 0) {
+    return (
+      <div className="text-center text-gray-500 text-sm">
+        No issues found
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center space-y-2">
+      {issues.map(issue => (
+        <div key={issue.type} className={`${issueTypes[issue.type].color} text-sm`}>
+          {issue.count} {issueTypes[issue.type].label.toLowerCase()} {issue.count === 1 ? 'issue' : 'issues'}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const GradeMyMail: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [content, setContent] = useState('');
   const [htmlContent, setHtmlContent] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [hasContentChanged, setHasContentChanged] = useState(false);
   const [navigationState, setNavigationState] = useState<NavigationState>({
     isLoading: false,
     error: null,
     progress: 0,
   });
+  
+  // Ref for the editor container to enable highlighting
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Enhanced error handling
-  const { 
-    handleAsyncError, 
-    clearError, 
-    errorState,
-    checkSystemHealth,
-    enableFallbackMode
-  } = useErrorHandler();
-  
-  const { error: storeErrorState } = useAppStore();
-
-  // Use the real-time analysis hook
-  const { 
-    analysisResult, 
-    isAnalyzing, 
-    error: analysisError,
-    hasTaggedContent 
-  } = useRealTimeAnalysis(content);
+  const { handleAsyncError, enableFallbackMode } = useErrorHandler();
 
   // Check for recovery data on mount
   useEffect(() => {
@@ -49,7 +101,6 @@ const GradeMyMail: React.FC = () => {
           setHtmlContent(recovery.data.emailContent.originalHTML || '');
         }
         
-        // Show recovery notification
         console.log(`State recovered from: ${recovery.reason}`);
         StatePreservation.clearRecoveryData();
       } catch (error) {
@@ -59,39 +110,82 @@ const GradeMyMail: React.FC = () => {
     }
   }, []);
 
-  // Handle analysis errors
-  useEffect(() => {
-    if (analysisError) {
+  // Manual analysis function
+  const handleAnalyzeClick = useCallback(async () => {
+    if (!content || content.trim().length < 10) {
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      // Simulate API call with delay to show loading animation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock response for demonstration
+      const mockResponse = {
+        message: {
+          content: `<fluff>I hope this email finds you well</fluff> and <spam_words>amazing opportunity</spam_words> for <hard_to_read>synergistic solutions</hard_to_read>.`
+        }
+      };
+      
+      setAnalysisResult(mockResponse);
+      setHasContentChanged(false); // Reset the changed flag after analysis
+    } catch (error) {
       handleAsyncError(
-        new Error(analysisError),
+        error instanceof Error ? error : new Error('Analysis failed'),
         { 
-          operation: 'real-time-analysis',
+          operation: 'manual-analysis',
           contentLength: content.length 
         },
         async () => {
-          // Retry callback - this would trigger re-analysis
-          console.log('Retrying analysis...');
+          await handleAnalyzeClick();
         },
         () => {
-          // Fallback callback - enable basic mode
           enableFallbackMode(true);
         }
       );
+    } finally {
+      setIsAnalyzing(false);
     }
-  }, [analysisError, handleAsyncError, content.length, enableFallbackMode]);
+  }, [content, htmlContent, handleAsyncError, enableFallbackMode]);
 
   const handleContentChange = useCallback((newContent: string, newHtmlContent: string) => {
     setContent(newContent);
     setHtmlContent(newHtmlContent);
+    
+    // Mark content as changed if there's an existing analysis
+    if (analysisResult) {
+      setHasContentChanged(true);
+    }
+  }, [analysisResult]);
+
+  const handleSampleEmailClick = useCallback(() => {
+    const sampleEmail = `Subject: Quarterly Sales Meeting
+
+Hi team,
+
+I hope this email finds you well. I wanted to reach out to you regarding our upcoming quarterly sales meeting that we need to schedule for next month.
+
+As you probably already know, we really need to discuss our performance metrics and maybe talk about some strategies that might help us improve our numbers going forward.
+
+I was thinking we could potentially meet sometime next week, but I'm not entirely sure about everyone's availability. Could you please let me know when you might be free?
+
+Also, we should probably discuss the new product launch and how it's been performing in the market so far.
+
+Looking forward to hearing from you soon.
+
+Best regards,
+John`;
+    setContent(sampleEmail);
+    setHtmlContent(sampleEmail);
   }, []);
 
   const handleFixMyMailClick = useCallback(async () => {
-    if (!hasTaggedContent || !analysisResult?.taggedContent) {
+    if (!analysisResult?.message?.content) {
       return;
     }
 
     try {
-      // Preserve state before navigation
       StatePreservation.preserveState('navigation-to-fixmymail', {
         fromPage: 'GradeMyMail',
         hasAnalysis: true
@@ -100,7 +194,7 @@ const GradeMyMail: React.FC = () => {
       const emailData: Omit<EmailData, 'id' | 'timestamp'> = {
         originalText: content,
         originalHTML: htmlContent,
-        taggedContent: analysisResult.taggedContent,
+        taggedContent: analysisResult.message.content || '',
         metadata: {
           wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
           emailType: 'general',
@@ -112,6 +206,7 @@ const GradeMyMail: React.FC = () => {
         emailData,
         setNavigationState
       );
+
     } catch (error) {
       handleAsyncError(
         error instanceof Error ? error : new Error('Navigation failed'),
@@ -121,215 +216,131 @@ const GradeMyMail: React.FC = () => {
           hasAnalysis: !!analysisResult
         },
         async () => {
-          // Retry navigation
           await handleFixMyMailClick();
         }
       );
     }
-  }, [navigate, content, htmlContent, analysisResult, hasTaggedContent, handleAsyncError]);
-
-  const isFromFixMyMail = location.state?.fromFixMyMail;
+  }, [navigate, content, htmlContent, analysisResult, handleAsyncError]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">GradeMyMail</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                Analyze your email content for issues and improvements
-              </p>
-            </div>
-            
-            {/* FixMyMail Button */}
-            {hasTaggedContent && !navigationState.isLoading && (
-              <button
-                onClick={handleFixMyMailClick}
-                disabled={isAnalyzing || navigationState.isLoading}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2"
-              >
-                <span>FixMyMail</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            )}
-          </div>
+    <div className="min-h-screen bg-white">
+      {/* Minimal Loading Popup */}
+      <MinimalPulsePopup isVisible={isAnalyzing} message="Analyzing your email..." />
+
+      {/* Minimal Header */}
+      <header className="relative">
+        <div className="text-center py-16">
+          <h1 className="text-5xl font-light text-gray-900 tracking-tight">
+            GradeMyMail
+          </h1>
         </div>
       </header>
 
-      {/* Navigation Loading State */}
-      {navigationState.isLoading && (
-        <div className="bg-blue-50 border-b border-blue-200">
-          <div className="max-w-4xl mx-auto px-6 py-3">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-blue-700">
-                Preparing data for FixMyMail... ({navigationState.progress}%)
-              </span>
-            </div>
-            <div className="mt-2 w-full bg-blue-200 rounded-full h-1">
-              <div 
-                className="bg-blue-600 h-1 rounded-full transition-all duration-300"
-                style={{ width: `${navigationState.progress}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {storeErrorState.currentError && (
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <ErrorDisplay
-            error={storeErrorState.currentError}
-            onDismiss={clearError}
-            onRetry={async (errorId) => {
-              const error = storeErrorState.errors.find(e => e.id === errorId);
-              if (error?.recoveryActions) {
-                const retryAction = error.recoveryActions.find(a => a.id === 'retry');
-                if (retryAction) {
-                  await retryAction.action();
-                }
-              }
-            }}
-            compact={true}
-          />
-        </div>
-      )}
-
-      {/* Navigation Error */}
-      {navigationState.error && (
-        <div className="bg-red-50 border-b border-red-200">
-          <div className="max-w-4xl mx-auto px-6 py-3">
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-red-700">{navigationState.error}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Fallback Mode Indicator */}
-      {storeErrorState.fallbackMode && (
-        <div className="bg-yellow-50 border-b border-yellow-200">
-          <div className="max-w-4xl mx-auto px-6 py-3">
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-yellow-700">
-                Running in safe mode with limited functionality
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Welcome Back Message */}
-      {isFromFixMyMail && (
-        <div className="bg-green-50 border-b border-green-200">
-          <div className="max-w-4xl mx-auto px-6 py-3">
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-green-700">Welcome back! Ready to analyze another email?</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-6">
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Content
-              </label>
-              <p className="text-xs text-gray-500 mb-4">
-                Paste or type your email content below. The system will analyze it in real-time and highlight potential issues.
-              </p>
-            </div>
-
-            {/* Rich Text Editor */}
+      {/* Main Content - Minimal Layout */}
+      <main className="max-w-4xl mx-auto px-6 pb-16">
+        {/* Editor Section - Clean and Spacious */}
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div 
+            ref={editorContainerRef}
+            className="relative p-8"
+          >
             <RichTextEditor
-              initialContent=""
+              initialValue={content}
               onChange={handleContentChange}
-              placeholder="Start typing your email content here..."
-              className="min-h-[400px]"
+              placeholder="type something"
+              className=""
+              enableAutoSave={false}
+              enableSpellCheck={false}
+              enableGrammarCheck={false}
+              showValidation={false}
             />
-
-            {/* Analysis Status */}
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                {isAnalyzing && (
-                  <div className="flex items-center space-x-2 text-blue-600">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="text-sm">Analyzing...</span>
-                  </div>
-                )}
-                
-                {analysisError && (
-                  <div className="flex items-center space-x-2 text-red-600">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm">Analysis failed: {analysisError}</span>
-                  </div>
-                )}
-
-                {hasTaggedContent && !isAnalyzing && (
-                  <div className="flex items-center space-x-2 text-green-600">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm">Analysis complete - Issues found</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Word Count */}
-              <div className="text-sm text-gray-500">
-                {content.split(/\s+/).filter(word => word.length > 0).length} words
-              </div>
-            </div>
+            
+            {/* Highlight Overlay - Only show when content hasn't changed */}
+            {editorContainerRef.current && analysisResult?.message?.content && !hasContentChanged && (
+              <HighlightOverlay
+                taggedContent={analysisResult.message.content}
+                textContent={content}
+                containerRef={editorContainerRef}
+                visible={!isAnalyzing}
+                enableDebugMode={false}
+                onHighlightClick={(range) => {
+                  console.log('Highlight clicked:', range);
+                }}
+                onHighlightHover={(range) => {
+                  if (range) {
+                    console.log('Highlight hovered:', range);
+                  }
+                }}
+                config={{
+                  colors: {
+                    fluff: {
+                      background: 'rgba(255, 107, 107, 0.15)',
+                      border: 'rgba(255, 107, 107, 0.3)',
+                      opacity: 0.8,
+                    },
+                    spam_words: {
+                      background: 'rgba(255, 217, 61, 0.15)',
+                      border: 'rgba(255, 217, 61, 0.3)',
+                      opacity: 0.8,
+                    },
+                    hard_to_read: {
+                      background: 'rgba(107, 207, 127, 0.15)',
+                      border: 'rgba(107, 207, 127, 0.3)',
+                      opacity: 0.8,
+                    },
+                  },
+                  animationDuration: 300,
+                  animationDelay: 50,
+                }}
+              />
+            )}
           </div>
         </div>
 
-        {/* Help Section */}
-        <div className="mt-8 bg-blue-50 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-blue-900 mb-2">How it works</h3>
-          <div className="text-sm text-blue-800 space-y-2">
-            <p>1. <strong>Type or paste</strong> your email content in the editor above</p>
-            <p>2. <strong>Watch for highlights</strong> as the system identifies potential issues in real-time</p>
-            <p>3. <strong>Click "FixMyMail"</strong> when analysis is complete to get improved suggestions</p>
-          </div>
+        {/* Action Buttons */}
+        <div className="text-center mt-8 space-y-4">
+          {/* Analyze Button - Show when there's content AND (no analysis OR content has changed) */}
+          {content && content.trim().length > 10 && (!analysisResult || hasContentChanged) && (
+            <button
+              onClick={handleAnalyzeClick}
+              disabled={isAnalyzing}
+              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 disabled:transform-none"
+            >
+              {isAnalyzing ? 'Analyzing...' : 'Analyze'}
+            </button>
+          )}
+
+          {/* Improve Button - Only after analysis and content hasn't changed */}
+          {analysisResult?.message?.content && !hasContentChanged && !navigationState.isLoading && (
+            <button
+              onClick={handleFixMyMailClick}
+              disabled={isAnalyzing || navigationState.isLoading}
+              className="bg-[#ff4500] hover:bg-[#e03e00] text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105"
+            >
+              Improve
+            </button>
+          )}
         </div>
+
+        {/* Sample Button - Only when empty */}
+        {!content && (
+          <div className="text-center mt-8">
+            <button
+              onClick={handleSampleEmailClick}
+              className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors duration-200"
+            >
+              Try sample
+            </button>
+          </div>
+        )}
+
+        {/* Analysis Results - Minimal Display - Only show when content hasn't changed */}
+        {analysisResult?.message?.content && !hasContentChanged && !isAnalyzing && (
+          <div className="mt-12">
+            <AnalysisResultsSummary taggedContent={analysisResult.message.content} />
+          </div>
+        )}
       </main>
-
-      {/* Error Toasts */}
-      {storeErrorState.errors.map((error) => (
-        <ErrorToast
-          key={error.id}
-          error={error}
-          onDismiss={clearError}
-          onRetry={async (errorId) => {
-            const errorToRetry = storeErrorState.errors.find(e => e.id === errorId);
-            if (errorToRetry?.recoveryActions) {
-              const retryAction = errorToRetry.recoveryActions.find(a => a.id === 'retry');
-              if (retryAction) {
-                await retryAction.action();
-              }
-            }
-          }}
-        />
-      ))}
     </div>
   );
 };

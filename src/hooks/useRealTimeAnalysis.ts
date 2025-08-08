@@ -72,7 +72,7 @@ export const useRealTimeAnalysis = (options: UseRealTimeAnalysisOptions = {}): U
   } = options;
 
   // Store integration
-  const { setAnalyzing, setError, clearError } = useAppStore();
+  const { setAnalyzing, addError, clearAllErrors } = useAppStore();
   
   // Engine instance (created once and reused)
   const engineRef = useRef<RealTimeAnalysisEngine | null>(null);
@@ -117,14 +117,17 @@ export const useRealTimeAnalysis = (options: UseRealTimeAnalysisOptions = {}): U
         setAnalyzing(newState.isAnalyzing);
         
         if (newState.error) {
-          setError({
-            hasError: true,
-            errorMessage: newState.error.message,
-            errorType: newState.error.type,
-            lastError: newState.error,
+          addError({
+            type: 'ai',
+            severity: 'medium',
+            message: newState.error.message,
+            userMessage: 'Analysis failed. Please try again.',
+            technicalMessage: newState.error.message,
+            retryable: true,
+            suggestions: ['Check your internet connection', 'Try again in a moment'],
           });
         } else {
-          clearError();
+          clearAllErrors();
         }
 
         // Trigger callbacks based on state changes
@@ -147,11 +150,14 @@ export const useRealTimeAnalysis = (options: UseRealTimeAnalysisOptions = {}): U
       },
       error: (error) => {
         console.error('❌ Analysis engine subscription error:', error);
-        setError({
-          hasError: true,
-          errorMessage: 'Analysis engine error',
-          errorType: 'client',
-          lastError: error,
+        addError({
+          type: 'client',
+          severity: 'high',
+          message: 'Analysis engine error',
+          userMessage: 'Analysis engine encountered an error. Please refresh the page.',
+          technicalMessage: error.message || 'Unknown error',
+          retryable: true,
+          suggestions: ['Refresh the page', 'Check your internet connection'],
         });
       }
     });
@@ -161,7 +167,7 @@ export const useRealTimeAnalysis = (options: UseRealTimeAnalysisOptions = {}): U
       subscriptionRef.current?.unsubscribe();
       subscriptionRef.current = null;
     };
-  }, [enabled, onAnalysisStart, onAnalysisComplete, onAnalysisError, onStateChange, setAnalyzing, setError, clearError, state.isAnalyzing]);
+  }, [enabled, onAnalysisStart, onAnalysisComplete, onAnalysisError, onStateChange, setAnalyzing, addError, clearAllErrors, state.isAnalyzing]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -197,8 +203,8 @@ export const useRealTimeAnalysis = (options: UseRealTimeAnalysisOptions = {}): U
     
     console.log('🧹 Clearing analysis state...');
     engineRef.current.clearAnalysis();
-    clearError();
-  }, [clearError]);
+    clearAllErrors();
+  }, [clearAllErrors]);
 
   // Cancel requests function
   const cancelRequests = useCallback(() => {

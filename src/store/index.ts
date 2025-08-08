@@ -64,7 +64,7 @@ export interface RecoveryAction {
 }
 
 // Error state interface with enhanced features
-interface ErrorState {
+export interface ErrorState {
   hasError: boolean;
   errors: StructuredError[];
   currentError?: StructuredError;
@@ -144,7 +144,7 @@ const initialErrorState: ErrorState = {
 // Create the store
 export const useAppStore = create<AppStore>()(
   devtools(
-    (set) => ({
+    (set): AppStore => ({
       // Initial state
       emailContent: initialEmailContent,
       ui: initialUIState,
@@ -385,7 +385,7 @@ export const useAppStore = create<AppStore>()(
         return preservedState;
       },
       
-      getErrorById: (errorId) => {
+      getErrorById: (errorId: string) => {
         const state = useAppStore.getState();
         return state.error.errors.find(e => e.id === errorId);
       },

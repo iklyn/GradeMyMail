@@ -1,199 +1,171 @@
-import express from 'express';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import compression from 'compression';
-import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
+const express = require('express');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3001;
 
-// Security middleware - Helmet
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "http://localhost:*"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
+// Enable CORS for frontend
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
 }));
 
-// CORS configuration
-const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com']
-    : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
-  credentials: true,
-  optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+// Parse JSON bodies
+app.use(express.json());
+
+// Mock analysis function
+const mockAnalyzeEmail = (content) => {
+  // Add some mock tags for demonstration
+  let taggedContent = content;
+  
+  // Add some mock tags
+  taggedContent = taggedContent.replace(/\b(amazing|incredible|fantastic|great|awesome)\b/gi, '<fluff>$1</fluff>');
+  taggedContent = taggedContent.replace(/\b(free|urgent|act now|limited time|buy now)\b/gi, '<spam_words>$1</spam_words>');
+  
+  // Mark long sentences as hard to read
+  const sentences = content.split(/[.!?]+/);
+  sentences.forEach(sentence => {
+    if (sentence.trim().split(' ').length > 20) {
+      taggedContent = taggedContent.replace(sentence.trim(), `<hard_to_read>${sentence.trim()}</hard_to_read>`);
+    }
+  });
+  
+  return taggedContent;
 };
 
-app.use(cors(corsOptions));
+// Mock fix function
+const mockFixEmail = (taggedContent) => {
+  const improvements = [
+    { original: 'amazing', improved: 'excellent' },
+    { original: 'incredible', improved: 'remarkable' },
+    { original: 'fantastic', improved: 'outstanding' },
+    { original: 'great', improved: 'effective' },
+    { original: 'awesome', improved: 'impressive' },
+    { original: 'free', improved: 'complimentary' },
+    { original: 'urgent', improved: 'time-sensitive' },
+    { original: 'act now', improved: 'take action' },
+    { original: 'buy now', improved: 'purchase today' }
+  ];
 
-// Compression middleware
-app.use(compression({
-  level: 6,
-  threshold: 1024,
-}));
-
-// HTTP request logging with Morgan
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
-  skip: (req) => req.url === '/api/health',
-}));
-
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Simple rate limiting
-const rateLimitStore = new Map();
-
-const simpleRateLimit = (windowMs, max, message) => {
-  return (req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
-    
-    // Clean up expired entries
-    for (const [key, data] of rateLimitStore.entries()) {
-      if (now > data.resetTime) {
-        rateLimitStore.delete(key);
-      }
+  let result = '';
+  for (const improvement of improvements) {
+    if (taggedContent.toLowerCase().includes(improvement.original.toLowerCase())) {
+      result += `<old_draft>${improvement.original}</old_draft><optimized_draft>${improvement.improved}</optimized_draft>\n`;
     }
-    
-    const current = rateLimitStore.get(ip) || { count: 0, resetTime: now + windowMs };
-    
-    if (now > current.resetTime) {
-      current.count = 1;
-      current.resetTime = now + windowMs;
-    } else {
-      current.count++;
-    }
-    
-    rateLimitStore.set(ip, current);
-    
-    if (current.count > max) {
-      return res.status(429).json({
-        error: 'Too many requests',
-        message,
-        retryAfter: Math.ceil((current.resetTime - now) / 1000),
-      });
-    }
-    
-    next();
-  };
+  }
+
+  return result || '<old_draft>No improvements needed</old_draft><optimized_draft>Content is already well-written</optimized_draft>';
 };
 
-// Apply rate limiting
-app.use('/api', simpleRateLimit(15 * 60 * 1000, 100, 'Too many requests'));
-
-// In-memory storage
-const temporaryStorage = new Map();
-
-// Health check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'healthy',
+  res.json({ 
+    status: 'ok', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
+    message: 'Simple server is running'
   });
 });
 
-// Mock analyze endpoint
-app.post('/api/analyze', simpleRateLimit(5 * 60 * 1000, 20, 'Too many AI requests'), (req, res) => {
-  const { message } = req.body;
-  
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-  
-  console.log(`📧 Analyzing email content (${message.length} characters)`);
-  
-  // Mock analysis
-  setTimeout(() => {
-    let taggedContent = message;
-    taggedContent = taggedContent.replace(/\b(amazing|incredible|fantastic)\b/gi, '<fluff>$1</fluff>');
-    taggedContent = taggedContent.replace(/\b(free|urgent|act now|limited time)\b/gi, '<spam_words>$1</spam_words>');
+// Analyze endpoint
+app.post('/api/analyze', (req, res) => {
+  try {
+    const { message } = req.body;
     
-    res.json({
-      message: {
-        content: taggedContent
-      }
-    });
-  }, 1000);
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    
+    console.log(`📧 Analyzing email content (${message.length} characters)`);
+    
+    // Simulate processing delay
+    setTimeout(() => {
+      const taggedContent = mockAnalyzeEmail(message);
+      
+      res.json({
+        message: {
+          content: taggedContent
+        }
+      });
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Analysis error:', error);
+    res.status(500).json({ error: 'Analysis failed' });
+  }
 });
 
-// Mock fix endpoint
-app.post('/api/fix', simpleRateLimit(5 * 60 * 1000, 20, 'Too many AI requests'), (req, res) => {
-  const { message } = req.body;
-  
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
+// Fix endpoint
+app.post('/api/fix', (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    
+    console.log(`🔧 Fixing tagged content (${message.length} characters)`);
+    
+    // Simulate processing delay
+    setTimeout(() => {
+      const improvements = mockFixEmail(message);
+      
+      res.json({
+        message: {
+          content: improvements
+        }
+      });
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Fix error:', error);
+    res.status(500).json({ error: 'Fix failed' });
   }
-  
-  console.log(`🔧 Fixing tagged content (${message.length} characters)`);
-  
-  setTimeout(() => {
-    res.json({
-      message: {
-        content: '<old_draft>amazing</old_draft><optimized_draft>excellent</optimized_draft>'
-      }
-    });
-  }, 1500);
 });
 
 // Store endpoint
 app.post('/api/store', (req, res) => {
-  const { payload } = req.body;
-  const id = uuidv4();
-  
-  temporaryStorage.set(id, {
-    id,
-    payload,
-    created: Date.now(),
-    expires: Date.now() + (30 * 60 * 1000),
-  });
-  
-  console.log(`💾 Stored data with ID: ${id}`);
-  res.json({ id });
+  try {
+    const { payload } = req.body;
+    const id = require('crypto').randomUUID();
+    
+    // In a real app, you'd store this in a database
+    // For now, just return the ID
+    console.log(`💾 Stored data with ID: ${id}`);
+    
+    res.json({ id });
+  } catch (error) {
+    console.error('Store error:', error);
+    res.status(500).json({ error: 'Store failed' });
+  }
 });
 
 // Load endpoint
 app.get('/api/load', (req, res) => {
-  const { id } = req.query;
-  const data = temporaryStorage.get(id);
-  
-  if (!data || Date.now() > data.expires) {
-    return res.status(404).json({ error: 'Data not found or expired' });
+  try {
+    const { id } = req.query;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'ID is required' });
+    }
+    
+    // Mock response - in real app, load from database
+    res.json({
+      payload: {
+        fullOriginalText: 'Sample text',
+        fullOriginalHTML: '<p>Sample text</p>',
+        taggedContent: 'Sample text'
+      }
+    });
+  } catch (error) {
+    console.error('Load error:', error);
+    res.status(500).json({ error: 'Load failed' });
   }
-  
-  console.log(`📤 Retrieved data with ID: ${id}`);
-  res.json(data);
-});
-
-// Error handling
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'production' ? 'An error occurred' : err.message,
-  });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🔒 Security: Helmet enabled`);
-  console.log(`📝 Logging: Morgan enabled`);
-  console.log(`🗜️  Compression: Enabled`);
-  console.log(`⚡ Rate limiting: Enabled`);
-  console.log(`🌐 CORS: Enabled`);
+  console.log(`🚀 Simple server running on port ${PORT}`);
+  console.log(`📊 Environment: development`);
+  console.log(`🔗 Frontend should connect to: http://localhost:${PORT}`);
+  console.log(`✅ Ready to analyze emails!`);
 });

@@ -15,26 +15,29 @@ export const useAnalyzeEmail = (
   content: string,
   options?: Omit<UseQueryOptions<AnalyzeResponse, APIError>, 'queryKey' | 'queryFn'>
 ) => {
-  const { setError, clearError, setAnalyzing } = useAppStore();
+  const { addError, clearAllErrors, setAnalyzing } = useAppStore();
   
   const query = useQuery({
     queryKey: queryKeys.analyze(content),
     queryFn: async () => {
       setAnalyzing(true);
-      clearError();
+      clearAllErrors();
       try {
         const result = await apiService.analyzeEmail(content);
         setAnalyzing(false);
-        clearError();
+        clearAllErrors();
         return result;
       } catch (error) {
         setAnalyzing(false);
         const apiError = error as APIError;
-        setError({
-          hasError: true,
-          errorMessage: apiError.message,
-          errorType: apiError.type,
-          lastError: apiError,
+        addError({
+          type: apiError.type,
+          severity: 'medium',
+          message: apiError.message,
+          userMessage: 'Analysis failed. Please try again.',
+          technicalMessage: apiError.message,
+          retryable: true,
+          suggestions: ['Check your internet connection', 'Try again in a moment'],
         });
         throw error;
       }
@@ -58,17 +61,17 @@ export const useAnalyzeEmail = (
 export const useFixEmail = (
   options?: Omit<UseMutationOptions<FixResponse, APIError, string>, 'mutationFn'>
 ) => {
-  const { setError, clearError, setFixing } = useAppStore();
+  const { addError, clearAllErrors, setFixing } = useAppStore();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (taggedContent: string) => {
       setFixing(true);
-      clearError();
+      clearAllErrors();
       try {
         const result = await apiService.fixEmail(taggedContent);
         setFixing(false);
-        clearError();
+        clearAllErrors();
         
         // Cache the result for potential reuse
         queryClient.setQueryData(queryKeys.fix(taggedContent), result);
@@ -77,11 +80,14 @@ export const useFixEmail = (
       } catch (error) {
         setFixing(false);
         const apiError = error as APIError;
-        setError({
-          hasError: true,
-          errorMessage: apiError.message,
-          errorType: apiError.type,
-          lastError: apiError,
+        addError({
+          type: apiError.type,
+          severity: 'medium',
+          message: apiError.message,
+          userMessage: 'Failed to fix email. Please try again.',
+          technicalMessage: apiError.message,
+          retryable: true,
+          suggestions: ['Try again', 'Check your internet connection'],
         });
         throw error;
       }
@@ -103,21 +109,24 @@ export const useStoreData = (
     taggedContent: string;
   }>, 'mutationFn'>
 ) => {
-  const { setError, clearError } = useAppStore();
+  const { addError, clearAllErrors } = useAppStore();
   
   return useMutation({
     mutationFn: async (payload) => {
-      clearError();
+      clearAllErrors();
       try {
         const result = await apiService.storeData(payload);
         return result;
       } catch (error) {
         const apiError = error as APIError;
-        setError({
-          hasError: true,
-          errorMessage: apiError.message,
-          errorType: apiError.type,
-          lastError: apiError,
+        addError({
+          type: apiError.type,
+          severity: 'medium',
+          message: apiError.message,
+          userMessage: 'Failed to store data. Please try again.',
+          technicalMessage: apiError.message,
+          retryable: true,
+          suggestions: ['Try again', 'Check your internet connection'],
         });
         throw error;
       }
@@ -132,22 +141,25 @@ export const useLoadData = (
   id: string,
   options?: Omit<UseQueryOptions<LoadResponse, APIError>, 'queryKey' | 'queryFn'>
 ) => {
-  const { setError, clearError } = useAppStore();
+  const { addError, clearAllErrors } = useAppStore();
   
   return useQuery({
     queryKey: queryKeys.load(id),
     queryFn: async () => {
-      clearError();
+      clearAllErrors();
       try {
         const result = await apiService.loadData(id);
         return result;
       } catch (error) {
         const apiError = error as APIError;
-        setError({
-          hasError: true,
-          errorMessage: apiError.message,
-          errorType: apiError.type,
-          lastError: apiError,
+        addError({
+          type: apiError.type,
+          severity: 'medium',
+          message: apiError.message,
+          userMessage: 'Failed to load data. Please try again.',
+          technicalMessage: apiError.message,
+          retryable: true,
+          suggestions: ['Try again', 'Check your internet connection'],
         });
         throw error;
       }

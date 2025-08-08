@@ -1,125 +1,73 @@
-import React, { useState } from 'react';
+import React, { useEffect, Suspense, lazy, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import GradeMyMail from './pages/GradeMyMail';
-import FixMyMail from './pages/FixMyMail';
-import SimpleDemo from './components/SimpleDemo';
-import SecurityDemo from './components/SecurityDemo';
-import RealTimeAnalysisDemo from './components/RealTimeAnalysisDemo';
-import VirtualizedDiffDemo from './components/VirtualizedDiffDemo';
-import HoverSynchronizationTest from './components/HoverSynchronizationTest';
-import ContentReconstructionDemo from './components/ContentReconstructionDemo';
+import { ThemeProvider } from './components/ThemeProvider';
+import { LoadingProvider } from './contexts/LoadingContext';
+import { apiService } from './services/api';
+import { LoadingScreen } from './components/LoadingScreen';
+import { AppErrorBoundary } from './components/ErrorBoundary';
+import { useErrorHandler } from './hooks/useErrorHandler';
 
-// Demo navigation component
-const DemoNavigation: React.FC = () => {
+// Simple lazy loading for main pages
+const GradeMyMail = lazy(() => import('./pages/GradeMyMail'));
+const FixMyMail = lazy(() => import('./pages/FixMyMail'));
+
+
+
+// Simple navigation handler
+const NavigationHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const [currentDemo, setCurrentDemo] = useState<'simple' | 'security' | 'analysis' | 'diff' | 'hover' | 'reconstruction'>('reconstruction');
 
-  // Only show demo navigation on demo routes
-  if (location.pathname === '/' || location.pathname.startsWith('/fixmymail')) {
-    return null;
-  }
+  useEffect(() => {
+    // Cancel all pending requests when navigation changes
+    apiService.cancelAllRequests();
+  }, [location.pathname]);
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex space-x-4">
-              <Link
-                to="/"
-                className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors duration-200"
-              >
-                ← Back to GradeMyMail
-              </Link>
-            </div>
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setCurrentDemo('simple')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'simple'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Simple Demo
-              </button>
-              <button
-                onClick={() => setCurrentDemo('security')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'security'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Security Demo
-              </button>
-              <button
-                onClick={() => setCurrentDemo('analysis')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'analysis'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Real-Time Analysis
-              </button>
-              <button
-                onClick={() => setCurrentDemo('diff')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'diff'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Virtualized Diff
-              </button>
-              <button
-                onClick={() => setCurrentDemo('hover')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'hover'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Hover Sync Test
-              </button>
-              <button
-                onClick={() => setCurrentDemo('reconstruction')}
-                className={`px-4 py-2 rounded-md ${
-                  currentDemo === 'reconstruction'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Content Reconstruction
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-      
-      {currentDemo === 'simple' && <SimpleDemo />}
-      {currentDemo === 'security' && <SecurityDemo />}
-      {currentDemo === 'analysis' && <RealTimeAnalysisDemo />}
-      {currentDemo === 'diff' && <VirtualizedDiffDemo />}
-      {currentDemo === 'hover' && <HoverSynchronizationTest />}
-      {currentDemo === 'reconstruction' && <ContentReconstructionDemo />}
-    </div>
-  );
+  return <>{children}</>;
 };
 
+// Simple loading fallback
+const RouteLoadingFallback: React.FC<{ route?: string }> = ({ route }) => (
+  <div className="flex items-center justify-center min-h-screen">
+    <LoadingScreen isVisible={true} />
+  </div>
+);
+
 function App() {
+  // Initialize error handling
+  const { handleError } = useErrorHandler();
+
   return (
-    <Router>
-      <Routes>
-        {/* Main application routes */}
-        <Route path="/" element={<GradeMyMail />} />
-        <Route path="/fixmymail/:dataId" element={<FixMyMail />} />
-        
-        {/* Demo routes */}
-        <Route path="/demos/*" element={<DemoNavigation />} />
-      </Routes>
-    </Router>
+    <ThemeProvider>
+      <LoadingProvider>
+        <Router>
+          <NavigationHandler>
+            <Routes>
+              {/* Main application routes */}
+              <Route 
+                path="/" 
+                element={
+                  <AppErrorBoundary>
+                    <Suspense fallback={<RouteLoadingFallback route="GradeMyMail" />}>
+                      <GradeMyMail />
+                    </Suspense>
+                  </AppErrorBoundary>
+                } 
+              />
+              <Route 
+                path="/fixmymail/:dataId" 
+                element={
+                  <AppErrorBoundary>
+                    <Suspense fallback={<RouteLoadingFallback route="FixMyMail" />}>
+                      <FixMyMail />
+                    </Suspense>
+                  </AppErrorBoundary>
+                } 
+              />
+            </Routes>
+          </NavigationHandler>
+        </Router>
+      </LoadingProvider>
+    </ThemeProvider>
   );
 }
 

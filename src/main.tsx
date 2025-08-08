@@ -5,7 +5,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import './index.css';
 import App from './App.tsx';
 import { AppErrorBoundary } from './components/ErrorBoundary';
-import { initWebVitals, observePerformance } from './utils/webVitals';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -52,12 +51,6 @@ createRoot(document.getElementById('root')!).render(
     </AppErrorBoundary>
   </StrictMode>
 );
-
-// Initialize Web Vitals monitoring
-initWebVitals();
-
-// Start performance monitoring
-observePerformance();
 
 // Register service worker for PWA functionality
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StructuredError, RecoveryAction } from '../../store';
+import { type StructuredError, type RecoveryAction } from '../../store';
 
 interface ErrorDisplayProps {
   error: StructuredError;

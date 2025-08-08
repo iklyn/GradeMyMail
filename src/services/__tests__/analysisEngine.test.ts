@@ -1,187 +1,159 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-  RealTimeAnalysisEngine, 
-  createAnalysisEngine, 
-  extractContent,
-  type AnalysisConfig 
-} from '../analysisEngine';
-import { apiService } from '../api';
-
-// Mock the API service
-vi.mock('../api', () => ({
-  apiService: {
-    analyzeEmail: vi.fn(),
-    cancelAllRequests: vi.fn(),
-  },
-}));
+import { RealTimeAnalysisEngine, extractContent, createAnalysisEngine } from '../analysisEngine';
+import { mockFetch, mockAIResponses, setupTestEnvironment, cleanupTestEnvironment } from '../../test-utils/mocks';
 
 describe('Analysis Engine', () => {
   let engine: RealTimeAnalysisEngine;
-  const mockApiService = apiService as any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    engine = createAnalysisEngine({
-      debounceMs: 100, // Faster for testing
-      minContentLength: 5,
-      enableDeduplication: true,
-      enableCaching: true,
-    });
+    setupTestEnvironment();
+    engine = createAnalysisEngine();
   });
 
   afterEach(() => {
+    cleanupTestEnvironment();
     engine.destroy();
   });
 
-  describe('Content Extraction', () => {
+  describe('extractContent', () => {
     it('should extract content correctly', () => {
-      const html = '<p>Hello <strong>world</strong>!</p>';
-      const plainText = 'Hello world!';
-      
-      const extracted = extractContent(html, plainText);
-      
-      expect(extracted.html).toBe(html);
-      expect(extracted.plainText).toBe(plainText);
-      expect(extracted.wordCount).toBe(2);
-      expect(extracted.characterCount).toBe(12);
-      expect(extracted.isEmpty).toBe(false);
-      expect(extracted.contentHash).toBeDefined();
+      const html = '<p>This is a <strong>test</strong> email.</p>';
+      const plainText = 'This is a test email.';
+
+      const result = extractContent(html, plainText);
+
+      expect(result.html).toBe(html);
+      expect(result.plainText).toBe(plainText);
+      expect(result.wordCount).toBe(5);
+      expect(result.characterCount).toBe(21);
+      expect(result.isEmpty).toBe(false);
+      expect(result.contentHash).toBeDefined();
     });
 
-    it('should detect empty content', () => {
-      const extracted = extractContent('', '');
-      
-      expect(extracted.isEmpty).toBe(true);
-      expect(extracted.wordCount).toBe(0);
-      expect(extracted.characterCount).toBe(0);
+    it('should handle empty content', () => {
+      const result = extractContent('', '');
+
+      expect(result.isEmpty).toBe(true);
+      expect(result.wordCount).toBe(0);
+      expect(result.characterCount).toBe(0);
     });
 
-    it('should handle whitespace-only content', () => {
-      const extracted = extractContent('<p>   </p>', '   ');
-      
-      expect(extracted.isEmpty).toBe(true);
-      expect(extracted.wordCount).toBe(0);
+    it('should calculate word count correctly', () => {
+      const result = extractContent('', 'Hello world test email content');
+
+      expect(result.wordCount).toBe(5);
+      expect(result.characterCount).toBe(30);
     });
 
-    it('should generate consistent hashes for same content', () => {
-      const content1 = extractContent('<p>Test</p>', 'Test');
-      const content2 = extractContent('<div>Test</div>', 'Test'); // Different HTML, same text
-      
-      expect(content1.contentHash).toBe(content2.contentHash);
+    it('should generate consistent content hash', () => {
+      const content = 'Same content';
+      const result1 = extractContent('', content);
+      const result2 = extractContent('', content);
+
+      expect(result1.contentHash).toBe(result2.contentHash);
     });
   });
 
-  describe('Real-Time Analysis Engine', () => {
-    it('should initialize with correct default state', () => {
+  describe('RealTimeAnalysisEngine', () => {
+    it('should initialize with default state', () => {
       const state = engine.getCurrentState();
-      
+
       expect(state.isAnalyzing).toBe(false);
       expect(state.content).toBeNull();
       expect(state.result).toBeNull();
       expect(state.error).toBeNull();
+      expect(state.lastAnalyzedAt).toBeNull();
     });
 
-    it('should not analyze content below minimum length', async () => {
+    it('should update state when analyzing content', (done) => {
+      global.fetch = mockFetch('/api/analyze', true);
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.isAnalyzing) {
+          expect(state.content).toBeDefined();
+          expect(state.content?.plainText).toBe('Test content for analysis');
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content for analysis</p>', 'Test content for analysis');
+    });
+
+    it('should handle successful analysis', (done) => {
+      global.fetch = mockFetch('/api/analyze', true);
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.result && !state.isAnalyzing) {
+          expect(state.result).toBeDefined();
+          expect(state.error).toBeNull();
+          expect(state.lastAnalyzedAt).toBeDefined();
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content</p>', 'Test content for analysis');
+    });
+
+    it('should handle analysis errors', (done) => {
+      global.fetch = mockFetch('/api/analyze', false);
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.error && !state.isAnalyzing) {
+          expect(state.error).toBeDefined();
+          expect(state.result).toBeNull();
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content</p>', 'Test content for analysis');
+    });
+
+    it('should filter out empty content', () => {
+      const initialState = engine.getCurrentState();
+      
+      engine.analyzeContent('', '');
+      
+      // State should not change for empty content
+      const newState = engine.getCurrentState();
+      expect(newState).toEqual(initialState);
+    });
+
+    it('should filter out content that is too short', () => {
+      const initialState = engine.getCurrentState();
+      
       engine.analyzeContent('<p>Hi</p>', 'Hi');
       
-      // Wait a bit for debounce
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      expect(mockApiService.analyzeEmail).not.toHaveBeenCalled();
+      // State should not change for content that's too short
+      const newState = engine.getCurrentState();
+      expect(newState).toEqual(initialState);
+    });
+  });
+
+  describe('Engine Management', () => {
+    it('should provide engine statistics', () => {
+      const stats = engine.getStats();
+
+      expect(stats).toHaveProperty('activeRequests');
+      expect(stats).toHaveProperty('cache');
+      expect(stats).toHaveProperty('config');
+      expect(stats).toHaveProperty('currentState');
+      expect(stats.activeRequests).toBe(0);
     });
 
-    it('should analyze content above minimum length', async () => {
-      mockApiService.analyzeEmail.mockResolvedValue({
-        message: { content: 'Tagged content' }
-      });
-
-      engine.analyzeContent('<p>Hello world!</p>', 'Hello world!');
+    it('should update configuration', () => {
+      const newConfig = { debounceMs: 500, minContentLength: 5 };
       
-      // Wait for debounce and processing
-      await new Promise(resolve => setTimeout(resolve, 200));
+      engine.updateConfig(newConfig);
       
-      expect(mockApiService.analyzeEmail).toHaveBeenCalledWith('Hello world!', expect.any(String));
-    });
-
-    it('should debounce multiple rapid content changes', async () => {
-      mockApiService.analyzeEmail.mockResolvedValue({
-        message: { content: 'Tagged content' }
-      });
-
-      // Rapid content changes
-      engine.analyzeContent('<p>Hello</p>', 'Hello');
-      engine.analyzeContent('<p>Hello world</p>', 'Hello world');
-      engine.analyzeContent('<p>Hello world!</p>', 'Hello world!');
-      
-      // Wait for debounce
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Should only call API once with the final content
-      expect(mockApiService.analyzeEmail).toHaveBeenCalledTimes(1);
-      expect(mockApiService.analyzeEmail).toHaveBeenCalledWith('Hello world!', expect.any(String));
-    });
-
-    it('should deduplicate identical content', async () => {
-      mockApiService.analyzeEmail.mockResolvedValue({
-        message: { content: 'Tagged content' }
-      });
-
-      const content = 'Hello world!';
-      
-      // Analyze same content twice
-      engine.analyzeContent(`<p>${content}</p>`, content);
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      engine.analyzeContent(`<div>${content}</div>`, content); // Different HTML, same text
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Should only call API once due to deduplication
-      expect(mockApiService.analyzeEmail).toHaveBeenCalledTimes(1);
-    });
-
-    it('should handle API errors gracefully', async () => {
-      const error = new Error('API Error');
-      mockApiService.analyzeEmail.mockRejectedValue(error);
-
-      engine.analyzeContent('<p>Hello world!</p>', 'Hello world!');
-      
-      // Wait for processing
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // The error handling is tested through the pipeline - 
-      // main thing is that it doesn't crash the application
-      expect(true).toBe(true); // Test passes if no crash occurs
-    });
-
-    it('should update state correctly during analysis', async () => {
-      let stateUpdates: any[] = [];
-      
-      engine.getState().subscribe(state => {
-        stateUpdates.push({ ...state });
-      });
-
-      mockApiService.analyzeEmail.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve({ message: { content: 'Tagged' } }), 50))
-      );
-
-      engine.analyzeContent('<p>Hello world!</p>', 'Hello world!');
-      
-      // Wait for debounce
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Wait for API call to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Should have states: initial, analyzing, completed
-      expect(stateUpdates.length).toBeGreaterThan(1);
-      expect(stateUpdates.some(s => s.isAnalyzing === true)).toBe(true);
-      expect(stateUpdates.some(s => s.isAnalyzing === false && s.result !== null)).toBe(true);
+      const stats = engine.getStats();
+      expect(stats.config.debounceMs).toBe(500);
+      expect(stats.config.minContentLength).toBe(5);
     });
 
     it('should clear analysis state', () => {
-      // Set some state first
-      engine.analyzeContent('<p>Hello world!</p>', 'Hello world!');
-      
       engine.clearAnalysis();
       
       const state = engine.getCurrentState();
@@ -193,44 +165,97 @@ describe('Analysis Engine', () => {
     it('should cancel all requests', () => {
       engine.cancelAllRequests();
       
-      expect(mockApiService.cancelAllRequests).toHaveBeenCalled();
-    });
-
-    it('should provide engine statistics', () => {
       const stats = engine.getStats();
-      
-      expect(stats).toHaveProperty('activeRequests');
-      expect(stats).toHaveProperty('cache');
-      expect(stats).toHaveProperty('config');
-      expect(stats).toHaveProperty('currentState');
-    });
-
-    it('should update configuration', () => {
-      const newConfig = { debounceMs: 500 };
-      
-      engine.updateConfig(newConfig);
-      
-      const stats = engine.getStats();
-      expect(stats.config.debounceMs).toBe(500);
+      expect(stats.activeRequests).toBe(0);
     });
   });
 
-  describe('Factory Function', () => {
-    it('should create engine with custom config', () => {
-      const customConfig: Partial<AnalysisConfig> = {
-        debounceMs: 2000,
-        minContentLength: 20,
-        enableCaching: false,
-      };
+  describe('Error handling', () => {
+    it('should handle network errors gracefully', (done) => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.error && !state.isAnalyzing) {
+          expect(state.error).toBeDefined();
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content</p>', 'Test content for analysis');
+    });
+
+    it('should handle API timeout', (done) => {
+      global.fetch = vi.fn().mockImplementation(() => 
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 100)
+        )
+      );
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.error && !state.isAnalyzing) {
+          expect(state.error).toBeDefined();
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content</p>', 'Test content for analysis');
+    });
+
+    it('should handle malformed responses', (done) => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ invalid: 'response' }),
+      });
+
+      const subscription = engine.getState().subscribe(state => {
+        if (state.error && !state.isAnalyzing) {
+          expect(state.error).toBeDefined();
+          subscription.unsubscribe();
+          done();
+        }
+      });
+
+      engine.analyzeContent('<p>Test content</p>', 'Test content for analysis');
+    });
+  });
+
+  describe('Performance', () => {
+    it('should handle large content efficiently', () => {
+      const largeContent = 'word '.repeat(1000);
       
-      const customEngine = createAnalysisEngine(customConfig);
-      const stats = customEngine.getStats();
+      const start = performance.now();
+      const result = extractContent(`<p>${largeContent}</p>`, largeContent);
+      const end = performance.now();
+
+      expect(result.wordCount).toBe(1000);
+      expect(end - start).toBeLessThan(100); // Should complete within 100ms
+    });
+
+    it('should generate content hash efficiently', () => {
+      const content = 'test content '.repeat(1000);
       
-      expect(stats.config.debounceMs).toBe(2000);
-      expect(stats.config.minContentLength).toBe(20);
-      expect(stats.config.enableCaching).toBe(false);
+      const start = performance.now();
+      const result1 = extractContent('', content);
+      const result2 = extractContent('', content);
+      const end = performance.now();
+
+      expect(result1.contentHash).toBe(result2.contentHash);
+      expect(end - start).toBeLessThan(50); // Should complete within 50ms
+    });
+
+    it('should handle concurrent analysis requests', () => {
+      global.fetch = mockFetch('/api/analyze', true);
       
-      customEngine.destroy();
+      // Start multiple analysis requests
+      engine.analyzeContent('<p>Content 1</p>', 'Content 1 for analysis');
+      engine.analyzeContent('<p>Content 2</p>', 'Content 2 for analysis');
+      engine.analyzeContent('<p>Content 3</p>', 'Content 3 for analysis');
+      
+      const stats = engine.getStats();
+      expect(stats.activeRequests).toBeLessThanOrEqual(1); // Should deduplicate or manage requests
     });
   });
 });

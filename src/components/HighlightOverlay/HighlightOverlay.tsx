@@ -44,26 +44,26 @@ export const HighlightOverlay: React.FC<HighlightOverlayProps> = ({
 
   // Memoize configuration to prevent unnecessary re-initializations
   const memoizedConfig = useMemo(() => ({
-    animationDuration: 800,
-    animationDelay: 100,
+    animationDuration: 600,
+    animationDelay: 50,
     enableGPUAcceleration: true,
     maxHighlights: 100,
     debounceMs: 16,
     colors: {
       fluff: {
-        background: 'rgba(6, 182, 212, 0.2)', // cyan-500
-        border: 'rgba(6, 182, 212, 0.4)',
-        opacity: 0.8,
+        background: 'rgba(6, 182, 212, 0.35)', // cyan-500 - more visible
+        border: 'rgba(6, 182, 212, 0.6)',
+        opacity: 0.9,
       },
       spam_words: {
-        background: 'rgba(234, 179, 8, 0.2)', // yellow-500
-        border: 'rgba(234, 179, 8, 0.4)',
-        opacity: 0.8,
+        background: 'rgba(234, 179, 8, 0.35)', // yellow-500 - more visible
+        border: 'rgba(234, 179, 8, 0.6)',
+        opacity: 0.9,
       },
       hard_to_read: {
-        background: 'rgba(239, 68, 68, 0.2)', // red-500
-        border: 'rgba(239, 68, 68, 0.4)',
-        opacity: 0.8,
+        background: 'rgba(239, 68, 68, 0.35)', // red-500 - more visible
+        border: 'rgba(239, 68, 68, 0.6)',
+        opacity: 0.9,
       },
     },
     ...config,

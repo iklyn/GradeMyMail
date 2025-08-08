@@ -25,6 +25,7 @@ import InitialContentPlugin from './plugins/InitialContentPlugin';
 import PastePlugin from './plugins/PastePlugin';
 import SpellCheckPlugin, { GrammarCheckPlugin } from './plugins/SpellCheckPlugin';
 import AccessibilityPlugin from './plugins/AccessibilityPlugin';
+import CleanEmptyStatePlugin from './plugins/CleanEmptyStatePlugin';
 import { sanitizeHTML, validateContent } from '../../utils/sanitization';
 import type { ContentValidationResult } from '../../utils/sanitization';
 import { useAutoSave } from '../../utils/autoSave';
@@ -326,7 +327,7 @@ const editorConfig = {
 };
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
-  placeholder = 'Enter your email content here...',
+  placeholder = 'Start writing your newsletter...',
   initialValue = '',
   onChange,
   onBlur,
@@ -336,15 +337,15 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
   readOnly = false,
   // Security and validation options
   enableAutoSave = true,
-  autoSaveKey = 'rich-text-editor-content',
-  showValidation = true,
+  autoSaveKey = 'newsletter-editor-content',
+  showValidation = false, // Simplified - hide validation by default
   onValidationChange,
   onPasteWarning,
   onPasteError,
   onAutoSaveError,
   // Advanced features for newsletter creation
-  enableSpellCheck = true,
-  enableGrammarCheck = true,
+  enableSpellCheck = false, // Simplified - disable by default
+  enableGrammarCheck = false, // Simplified - disable by default
   enableAccessibility = true,
   customDictionary = [],
   onSpellingSuggestion,
@@ -397,24 +398,24 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
   const initialConfig = {
     ...editorConfig,
     editable: !readOnly,
-    editorState: sanitizedInitialValue ? sanitizedInitialValue : undefined,
+    // Remove editorState to prevent conflicts with InitialContentPlugin
   };
 
-  // Auto-restore content on mount if available
-  useEffect(() => {
-    if (autoSaveManager && !initialValue) {
-      const saved = autoSaveManager.restore();
-      if (saved) {
-        console.log('Auto-restored content from:', new Date(saved.timestamp));
-        // Set the content directly using the editor ref
-        setTimeout(() => {
-          if (ref && 'current' in ref && ref.current) {
-            ref.current.setContent(saved.html);
-          }
-        }, 100);
-      }
-    }
-  }, [autoSaveManager, initialValue, ref]);
+  // Auto-restore content on mount if available - temporarily disabled
+  // useEffect(() => {
+  //   if (autoSaveManager && !initialValue) {
+  //     const saved = autoSaveManager.restore();
+  //     if (saved) {
+  //       console.log('Auto-restored content from:', new Date(saved.timestamp));
+  //       // Set the content directly using the editor ref
+  //       setTimeout(() => {
+  //         if (ref && 'current' in ref && ref.current) {
+  //           ref.current.setContent(saved.html);
+  //         }
+  //       }, 100);
+  //     }
+  //   }
+  // }, [autoSaveManager, initialValue, ref]);
 
   return (
     <div className={`rich-text-editor ${className}`}>
@@ -440,16 +441,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <KeyboardShortcutsPlugin />
+            <CleanEmptyStatePlugin />
             <InitialContentPlugin initialValue={sanitizedInitialValue} />
             {autoFocus && <AutoFocusPlugin />}
             
-            {/* Security plugins */}
+            {/* Essential plugins only */}
             <PastePlugin 
               onPasteWarning={handlePasteWarning}
               onPasteError={handlePasteError}
             />
             
-            {/* Advanced feature plugins for newsletter creation */}
             {enableSpellCheck && (
               <SpellCheckPlugin
                 enabled={enableSpellCheck}
@@ -467,7 +468,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
             
             {enableAccessibility && (
               <AccessibilityPlugin
-                announceChanges={true}
+                announceChanges={false} // Simplified
                 enableKeyboardShortcuts={true}
                 onAnnouncement={onAccessibilityAnnouncement}
               />
@@ -484,10 +485,9 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
             />
           </div>
           
-          {/* Validation feedback */}
-          {showValidation && (validationResult?.errors.length || validationResult?.warnings.length || pasteWarnings.length || pasteError) && (
+          {/* Minimal validation feedback */}
+          {showValidation && (pasteError || (validationResult?.errors.length)) && (
             <div className="validation-feedback">
-              {/* Paste errors */}
               {pasteError && (
                 <div className="validation-error">
                   <span className="error-icon">⚠️</span>
@@ -495,59 +495,20 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
                 </div>
               )}
               
-              {/* Paste warnings */}
-              {pasteWarnings.map((warning, index) => (
-                <div key={index} className="validation-warning">
-                  <span className="warning-icon">⚡</span>
-                  <span className="warning-text">{warning}</span>
-                </div>
-              ))}
-              
-              {/* Validation errors */}
               {validationResult?.errors.map((error, index) => (
                 <div key={index} className="validation-error">
                   <span className="error-icon">⚠️</span>
                   <span className="error-text">{error}</span>
                 </div>
               ))}
-              
-              {/* Validation warnings */}
-              {validationResult?.warnings.map((warning, index) => (
-                <div key={index} className="validation-warning">
-                  <span className="warning-icon">⚡</span>
-                  <span className="warning-text">{warning}</span>
-                </div>
-              ))}
-              
-              {/* Content stats */}
-              {validationResult && (
-                <div className="content-stats">
-                  <span className="stat">
-                    {validationResult.stats.characterCount.toLocaleString()} characters
-                  </span>
-                  <span className="stat-separator">•</span>
-                  <span className="stat">
-                    {validationResult.stats.wordCount.toLocaleString()} words
-                  </span>
-                  <span className="stat-separator">•</span>
-                  <span className="stat">
-                    {(validationResult.stats.htmlSize / 1024).toFixed(1)}KB
-                  </span>
-                </div>
-              )}
             </div>
           )}
           
-          {/* Auto-save indicator */}
-          {enableAutoSave && autoSaveManager && (
+          {/* Minimal auto-save indicator */}
+          {enableAutoSave && autoSaveManager && autoSaveManager.lastSaveTime && (
             <div className="auto-save-indicator">
               <span className="save-status-icon">💾</span>
-              <span>
-                {autoSaveManager.lastSaveTime 
-                  ? `Auto-saved ${autoSaveManager.lastSaveTime}`
-                  : 'Auto-save enabled'
-                }
-              </span>
+              <span>Saved</span>
             </div>
           )}
         </div>

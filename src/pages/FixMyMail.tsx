@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { NavigationManager, NavigationState } from '../utils/navigationUtils';
-import { EmailData } from '../utils/stateTransfer';
+import { useParams, useNavigate } from 'react-router-dom';
+import { NavigationManager, type NavigationState } from '../utils/navigationUtils';
+import { type EmailData } from '../utils/stateTransfer';
 import VirtualizedDiffViewer from '../components/VirtualizedDiff/VirtualizedDiffViewer';
-import { contentReconstruction } from '../utils/contentReconstruction';
+
 import { useErrorHandler } from '../hooks/useErrorHandler';
-import { ErrorDisplay, ErrorToast } from '../components/ErrorDisplay';
+import { ErrorDisplay } from '../components/ErrorDisplay';
 import { StatePreservation } from '../utils/errorRecovery';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
+import { useLoading } from '../contexts/LoadingContext';
+import Logo from '../components/ui/Logo';
 
 interface FixMyMailState {
   emailData: EmailData | null;
@@ -21,7 +23,7 @@ interface FixMyMailState {
 const FixMyMail: React.FC = () => {
   const { dataId } = useParams<{ dataId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
+  // const location = useLocation();
   
   const [state, setState] = useState<FixMyMailState>({
     emailData: null,
@@ -41,12 +43,15 @@ const FixMyMail: React.FC = () => {
   const { 
     handleAsyncError, 
     clearError, 
-    errorState,
-    retryWithBackoff,
+    // errorState,
+    // retryWithBackoff,
     enableFallbackMode
   } = useErrorHandler();
   
   const { error: storeErrorState } = useAppStore();
+
+  // Loading state management
+  const { startAnalysisLoading, updateProgress, stopLoading } = useLoading();
 
   // Enhanced data hydration and validation
   useEffect(() => {
@@ -125,16 +130,19 @@ const FixMyMail: React.FC = () => {
 
   const generateImprovedContent = async (emailData: EmailData) => {
     try {
+      // Start loading screen for improvement generation
+      startAnalysisLoading('fixing', 'Generating improved alternatives...');
+      updateProgress(20);
       setState(prev => ({ ...prev, loadingProgress: 70 }));
 
-      // Extract tagged sentences for improvement
-      const taggedSentences = extractTaggedSentences(emailData.taggedContent);
-      
-      if (taggedSentences.length === 0) {
+      // Validate that tagged content has valid tags
+      const tagRegex = /<(fluff|spam_words|hard_to_read)>.*?<\/\1>/g;
+      if (!tagRegex.test(emailData.taggedContent)) {
+        stopLoading();
         const error = new Error('No issues found to improve. The email content appears to be already optimized.');
         handleAsyncError(error, { 
           operation: 'generate-improvements',
-          noTaggedSentences: true,
+          noTaggedContent: true,
           taggedContentLength: emailData.taggedContent.length
         });
         setState(prev => ({
@@ -145,27 +153,28 @@ const FixMyMail: React.FC = () => {
         return;
       }
 
+      updateProgress(60);
       setState(prev => ({ ...prev, loadingProgress: 80 }));
 
-      // Call the fix API with enhanced error handling
-      const result = await apiService.fixEmail(taggedSentences.join(' '));
+      // Call the fix API with the full tagged content (not just extracted sentences)
+      const result = await apiService.fixEmail(emailData.taggedContent);
+      updateProgress(80);
       setState(prev => ({ ...prev, loadingProgress: 90 }));
 
-      // Reconstruct the improved content
-      const improvedContent = contentReconstruction(
-        emailData.originalText,
-        emailData.taggedContent,
-        result.message.content
-      );
-
+      // Use the improved content directly
+      updateProgress(100);
       setState(prev => ({
         ...prev,
-        improvedContent,
+        improvedContent: result.message.content,
         isLoading: false,
         loadingProgress: 100,
       }));
 
+      // Loading screen will auto-close
+      setTimeout(() => stopLoading(), 500);
+
     } catch (error) {
+      stopLoading(); // Stop loading on error
       const errorMessage = `Failed to generate improvements: ${error instanceof Error ? error.message : 'Unknown error'}`;
       handleAsyncError(
         error instanceof Error ? error : new Error(errorMessage),
@@ -197,17 +206,7 @@ const FixMyMail: React.FC = () => {
     }
   };
 
-  const extractTaggedSentences = (taggedContent: string): string[] => {
-    const tagRegex = /<(fluff|spam_words|hard_to_read)>(.*?)<\/\1>/g;
-    const sentences: string[] = [];
-    let match;
 
-    while ((match = tagRegex.exec(taggedContent)) !== null) {
-      sentences.push(match[2].trim());
-    }
-
-    return sentences;
-  };
 
   const handleBackToGradeMyMail = useCallback(async () => {
     try {
@@ -355,132 +354,62 @@ const FixMyMail: React.FC = () => {
 
   // Main FixMyMail interface
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-white">
+      {/* Minimal Header */}
+      <header className="border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
+              {/* Logo in top-left corner */}
+              <Logo size="sm" showText={false} />
+              <div className="h-6 w-px bg-gray-300"></div>
               <button
                 onClick={handleBackToGradeMyMail}
                 disabled={navigationState.isLoading}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 disabled:text-gray-400 transition-colors duration-200"
+                className="btn-ghost"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="text-sm font-medium">Back to GradeMyMail</span>
+                ← Back
               </button>
-              <div className="h-4 w-px bg-gray-300"></div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">FixMyMail</h1>
-                <p className="text-sm text-gray-600">Compare original and improved versions</p>
-              </div>
+              <h1 className="text-xl font-semibold text-gray-900">FixMyMail</h1>
             </div>
             
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleCopyImprovedContent}
-                disabled={!state.improvedContent}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <span>Copy Improved</span>
-              </button>
-            </div>
+            <button
+              onClick={handleCopyImprovedContent}
+              disabled={!state.improvedContent}
+              className="btn-primary"
+            >
+              Copy Improved
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Navigation Loading State */}
+      {/* Loading State - minimal */}
       {navigationState.isLoading && (
-        <div className="bg-blue-50 border-b border-blue-200">
+        <div className="border-b border-gray-200 bg-gray-50">
           <div className="max-w-7xl mx-auto px-6 py-3">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-blue-700">
-                Returning to GradeMyMail... ({navigationState.progress}%)
-              </span>
+            <div className="flex items-center space-x-2">
+              <div className="loading-spinner"></div>
+              <span className="text-sm text-gray-600">Returning...</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - Clean */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {state.emailData && state.improvedContent && (
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="border border-gray-200 rounded-md overflow-hidden">
             <VirtualizedDiffViewer
               originalContent={state.emailData.originalText}
-              improvedContent={state.improvedContent}
+              modifiedContent={state.improvedContent}
               className="h-[calc(100vh-200px)]"
             />
           </div>
         )}
-
-        {/* Metadata */}
-        {state.emailData && (
-          <div className="mt-6 bg-white rounded-lg shadow-sm border p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Email Analysis Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-gray-700">Word Count:</span>
-                <span className="ml-2 text-gray-600">{state.emailData.metadata?.wordCount || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-700">Email Type:</span>
-                <span className="ml-2 text-gray-600 capitalize">{state.emailData.metadata?.emailType || 'General'}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-700">Analyzed:</span>
-                <span className="ml-2 text-gray-600">
-                  {new Date(state.emailData.timestamp).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
-      {/* Error Display */}
-      {storeErrorState.currentError && (
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <ErrorDisplay
-            error={storeErrorState.currentError}
-            onDismiss={clearError}
-            onRetry={async (errorId) => {
-              const error = storeErrorState.errors.find(e => e.id === errorId);
-              if (error?.recoveryActions) {
-                const retryAction = error.recoveryActions.find(a => a.id === 'retry');
-                if (retryAction) {
-                  await retryAction.action();
-                }
-              }
-            }}
-            compact={true}
-          />
-        </div>
-      )}
 
-      {/* Error Toasts */}
-      {storeErrorState.errors.map((error) => (
-        <ErrorToast
-          key={error.id}
-          error={error}
-          onDismiss={clearError}
-          onRetry={async (errorId) => {
-            const errorToRetry = storeErrorState.errors.find(e => e.id === errorId);
-            if (errorToRetry?.recoveryActions) {
-              const retryAction = errorToRetry.recoveryActions.find(a => a.id === 'retry');
-              if (retryAction) {
-                await retryAction.action();
-              }
-            }
-          }}
-        />
-      ))}
     </div>
   );
 };
