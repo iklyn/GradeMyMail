@@ -26,6 +26,8 @@ import PastePlugin from './plugins/PastePlugin';
 import SpellCheckPlugin, { GrammarCheckPlugin } from './plugins/SpellCheckPlugin';
 import AccessibilityPlugin from './plugins/AccessibilityPlugin';
 import CleanEmptyStatePlugin from './plugins/CleanEmptyStatePlugin';
+import PlaceholderPlugin from './plugins/PlaceholderPlugin';
+import LineBreakPlugin from './plugins/LineBreakPlugin';
 import { sanitizeHTML, validateContent } from '../../utils/sanitization';
 import type { ContentValidationResult } from '../../utils/sanitization';
 import { useAutoSave } from '../../utils/autoSave';
@@ -146,9 +148,7 @@ function useEditorRef(autoSaveManager?: ReturnType<typeof useAutoSave>) {
     },
     restoreAutoSave: () => {
       if (autoSaveManager) {
-        console.log('Attempting to restore auto-save...');
         const saved = autoSaveManager.restore();
-        console.log('Restored data:', saved);
         if (saved) {
           editor.update(() => {
             try {
@@ -182,9 +182,7 @@ function useEditorRef(autoSaveManager?: ReturnType<typeof useAutoSave>) {
       autoSaveManager?.clear();
     },
     hasAutoSave: () => {
-      const hasSaved = autoSaveManager?.hasSaved ?? false;
-      console.log('Has auto-save:', hasSaved);
-      return hasSaved;
+      return autoSaveManager?.hasSaved ?? false;
     },
   };
 }
@@ -222,7 +220,7 @@ function ChangeHandler({
         const html = sanitizeHTML($generateHtmlFromNodes(editor, null));
         const text = $getRoot().getTextContent();
         
-        console.log('Editor content changed:', { htmlLength: html.length, textLength: text.length });
+        // Content changed
         
         // Validate content
         if (onValidationChange) {
@@ -232,7 +230,6 @@ function ChangeHandler({
         
         // Trigger auto-save
         if (autoSaveManager && (html.trim() || text.trim())) {
-          console.log('Triggering auto-save...');
           autoSaveManager.save(html, text);
         }
         
@@ -327,7 +324,7 @@ const editorConfig = {
 };
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
-  placeholder = 'Start writing your newsletter...',
+  placeholder = 'type something',
   initialValue = '',
   onChange,
   onBlur,
@@ -362,7 +359,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
     debounceMs: 2000,
     maxVersions: 5,
     onSave: (data) => {
-      console.log('Content auto-saved:', data.timestamp, 'HTML length:', data.html.length);
+      // Content auto-saved
     },
     onError: onAutoSaveError,
   }) : undefined;
@@ -398,7 +395,6 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
   const initialConfig = {
     ...editorConfig,
     editable: !readOnly,
-    // Remove editorState to prevent conflicts with InitialContentPlugin
   };
 
   // Auto-restore content on mount if available - temporarily disabled
@@ -431,17 +427,18 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
                   onFocus={onFocus}
                 />
               }
-              placeholder={
-                <div className="editor-placeholder">{placeholder}</div>
-              }
+              placeholder={null}
               ErrorBoundary={LexicalErrorBoundary}
             />
+            <PlaceholderPlugin placeholder={placeholder} />
+            <LineBreakPlugin />
             <HistoryPlugin />
             <ListPlugin />
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <KeyboardShortcutsPlugin />
-            <CleanEmptyStatePlugin />
+            {/* Temporarily disabled to fix placeholder visibility */}
+            {/* <CleanEmptyStatePlugin /> */}
             <InitialContentPlugin initialValue={sanitizedInitialValue} />
             {autoFocus && <AutoFocusPlugin />}
             

@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import axios from 'axios';
+import { ProfessionalAIRouter } from './ai-engines/professional-ai-router.js';
 
 const execAsync = promisify(exec);
 

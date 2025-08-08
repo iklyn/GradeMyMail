@@ -242,7 +242,7 @@ const FixMyMail: React.FC = () => {
 
     try {
       await navigator.clipboard.writeText(state.improvedContent);
-      console.log('Content copied to clipboard');
+      // Content copied successfully
       // Could add a success toast notification here
     } catch (error) {
       handleAsyncError(
@@ -265,7 +265,7 @@ const FixMyMail: React.FC = () => {
             textArea.select();
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            console.log('Content copied using fallback method');
+            // Content copied using fallback method
           } catch (fallbackError) {
             console.error('Fallback copy also failed:', fallbackError);
           }
