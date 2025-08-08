@@ -70,9 +70,27 @@ function rateMetric(name: string, value: number): 'good' | 'needs-improvement' |
   return 'poor';
 }
 
-// Send metrics to analytics service (placeholder for now)
+// Send metrics to analytics service and monitoring system
 function sendToAnalytics(metric: WebVitalsMetric) {
-  // In a real application, you would send this to your analytics service
+  // Send to monitoring service
+  try {
+    const { monitoringService } = require('../services/monitoringService');
+    monitoringService.trackPerformanceMetric(
+      `web_vital_${metric.name.toLowerCase()}`,
+      metric.value,
+      metric.name === 'CLS' ? 'count' : 'ms',
+      {
+        rating: metric.rating,
+        delta: metric.delta,
+        id: metric.id,
+        navigationType: metric.navigationType
+      }
+    );
+  } catch (error) {
+    console.warn('Failed to send metric to monitoring service:', error);
+  }
+  
+  // Log for debugging
   console.log('Web Vitals Metric:', metric);
   
   // Store in localStorage for development debugging

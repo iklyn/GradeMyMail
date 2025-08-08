@@ -24,14 +24,23 @@ app.use(express.json({ limit: '10mb' }));
 // Ollama client configuration
 const gmmClient = axios.create({
   baseURL: 'http://localhost:11434',
-  timeout: 30000,
+  timeout: 60000, // Increased to 60 seconds
   headers: { 'Content-Type': 'application/json' }
 });
 
 const fmmClient = axios.create({
   baseURL: 'http://localhost:11434', 
-  timeout: 30000,
+  timeout: 60000, // Increased to 60 seconds
   headers: { 'Content-Type': 'application/json' }
+});
+
+// Basic health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Health check endpoint
@@ -128,11 +137,114 @@ app.post('/api/fix', async (req, res) => {
   }
 });
 
+// In-memory storage for temporary data (30 minutes TTL)
+const temporaryStorage = new Map();
+const DATA_TTL = 30 * 60 * 1000; // 30 minutes
+
+// Cleanup expired data every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, data] of temporaryStorage.entries()) {
+    if (now > data.expires) {
+      temporaryStorage.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Store temporary data
+app.post('/api/store', (req, res) => {
+  try {
+    const { payload } = req.body;
+    
+    if (!payload) {
+      return res.status(400).json({ error: 'Payload is required' });
+    }
+
+    const id = require('crypto').randomUUID();
+    const now = Date.now();
+    
+    const storedData = {
+      id,
+      payload,
+      created: now,
+      expires: now + DATA_TTL,
+    };
+    
+    temporaryStorage.set(id, storedData);
+    
+    console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes)`);
+    res.json({ id });
+  } catch (error) {
+    console.error('❌ Store failed:', error.message);
+    res.status(500).json({ error: 'Failed to store data', details: error.message });
+  }
+});
+
+// Load stored data
+app.get('/api/load', (req, res) => {
+  try {
+    const { id } = req.query;
+    
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid ID parameter' });
+    }
+    
+    const storedData = temporaryStorage.get(id);
+    
+    if (!storedData) {
+      return res.status(404).json({ error: 'Data not found or has expired' });
+    }
+    
+    // Check if data has expired
+    if (Date.now() > storedData.expires) {
+      temporaryStorage.delete(id);
+      return res.status(404).json({ error: 'Data has expired and been removed' });
+    }
+    
+    console.log(`📤 Retrieved data with ID: ${id}`);
+    res.json(storedData);
+  } catch (error) {
+    console.error('❌ Load failed:', error.message);
+    res.status(500).json({ error: 'Failed to load data', details: error.message });
+  }
+});
+
+// Delete stored data
+app.delete('/api/store', (req, res) => {
+  try {
+    const { id } = req.query;
+    
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid ID parameter' });
+    }
+    
+    const existed = temporaryStorage.has(id);
+    temporaryStorage.delete(id);
+    
+    console.log(`🗑️ Deleted data with ID: ${id} (existed: ${existed})`);
+    res.json({ success: true, deleted: existed, id });
+  } catch (error) {
+    console.error('❌ Delete failed:', error.message);
+    res.status(500).json({ error: 'Failed to delete data', details: error.message });
+  }
+});
+
 // Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ 
     message: 'Ollama server is running!',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    storage: {
+      entries: temporaryStorage.size,
+      endpoints: [
+        'GET /api/health/ready',
+        'POST /api/analyze', 
+        'POST /api/fix',
+        'POST /api/store',
+        'GET /api/load',
+        'DELETE /api/store'
+      ]
+    }
   });
 });
 

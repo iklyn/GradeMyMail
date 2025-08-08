@@ -3,6 +3,8 @@ import axios, { AxiosInstance } from 'axios';
 import { withRetry, RETRY_CONFIGS, circuitBreakers } from './retry-logic.js';
 import { AIModelError, NetworkError, TimeoutError } from './error-handler.js';
 import { metricsCollector, logPerformance } from './monitoring.js';
+import { AIModelLoadBalancer } from './load-balancer.js';
+import { MultiLevelCache } from './caching-system.js';
 
 // Types for AI model communication
 interface OllamaRequest {
@@ -50,21 +52,47 @@ class AIModelCommunicator {
   private batchQueue: BatchRequest[] = [];
   private batchTimer: NodeJS.Timeout | null = null;
   private connectionPool: Agent;
+  private gmmLoadBalancer: AIModelLoadBalancer;
+  private fmmLoadBalancer: AIModelLoadBalancer;
+  private multiLevelCache: MultiLevelCache;
 
   constructor() {
     // Create HTTP agent with connection pooling and keep-alive
     this.connectionPool = new Agent({
       keepAlive: true,
       keepAliveMsecs: 30000, // 30 seconds
-      maxSockets: 10, // Maximum concurrent connections per host
-      maxFreeSockets: 5, // Maximum idle connections per host
+      maxSockets: 20, // Increased for load balancing
+      maxFreeSockets: 10, // Increased for load balancing
       timeout: AI_CONFIG.TIMEOUT,
-      freeSocketTimeout: 15000, // 15 seconds before closing idle connections
     });
 
     // Create Axios instances with optimized configuration
     this.gmmClient = this.createAxiosInstance(AI_CONFIG.GMM_PORT);
     this.fmmClient = this.createAxiosInstance(AI_CONFIG.FMM_PORT);
+
+    // Initialize load balancers
+    this.gmmLoadBalancer = new AIModelLoadBalancer({
+      strategy: 'least-connections',
+      healthCheckInterval: 30000,
+      maxRetries: 3,
+    });
+
+    this.fmmLoadBalancer = new AIModelLoadBalancer({
+      strategy: 'least-connections',
+      healthCheckInterval: 30000,
+      maxRetries: 3,
+    });
+
+    // Initialize multi-level cache
+    this.multiLevelCache = new MultiLevelCache({
+      maxSize: 100 * 1024 * 1024, // 100MB
+      maxItems: 10000,
+      defaultTtl: 5 * 60 * 1000, // 5 minutes
+      strategy: 'lru',
+    });
+
+    // Add default model instances
+    this.setupDefaultInstances();
 
     // Start cache cleanup interval
     this.startCacheCleanup();
@@ -108,6 +136,48 @@ class AIModelCommunicator {
     );
 
     return instance;
+  }
+
+  private setupDefaultInstances(): void {
+    // Add default GMM instances
+    this.gmmLoadBalancer.addInstance('gmm-1', 'localhost', AI_CONFIG.GMM_PORT, 1);
+    
+    // Add default FMM instances  
+    this.fmmLoadBalancer.addInstance('fmm-1', 'localhost', AI_CONFIG.FMM_PORT, 1);
+
+    // In production, you would add multiple instances:
+    // this.gmmLoadBalancer.addInstance('gmm-2', 'ai-server-2', AI_CONFIG.GMM_PORT, 1);
+    // this.gmmLoadBalancer.addInstance('gmm-3', 'ai-server-3', AI_CONFIG.GMM_PORT, 2); // Higher weight
+    
+    console.log('🔄 Set up default AI model instances for load balancing');
+  }
+
+  // Add new model instance to load balancer
+  addModelInstance(model: 'GMM' | 'FMM', id: string, host: string, port: number, weight: number = 1): void {
+    try {
+      if (model === 'GMM') {
+        this.gmmLoadBalancer.addInstance(id, host, port, weight);
+      } else {
+        this.fmmLoadBalancer.addInstance(id, host, port, weight);
+      }
+      console.log(`➕ Added ${model} instance: ${id} (${host}:${port})`);
+    } catch (error) {
+      console.error(`❌ Failed to add ${model} instance ${id}:`, error);
+    }
+  }
+
+  // Remove model instance from load balancer
+  removeModelInstance(model: 'GMM' | 'FMM', id: string): void {
+    try {
+      if (model === 'GMM') {
+        this.gmmLoadBalancer.removeInstance(id);
+      } else {
+        this.fmmLoadBalancer.removeInstance(id);
+      }
+      console.log(`➖ Removed ${model} instance: ${id}`);
+    } catch (error) {
+      console.error(`❌ Failed to remove ${model} instance ${id}:`, error);
+    }
   }
 
   private startCacheCleanup(): void {
@@ -234,12 +304,28 @@ class AIModelCommunicator {
   async analyzeEmail(content: string): Promise<string> {
     const cacheKey = this.getCacheKey(content, AI_CONFIG.GMM_MODEL);
     
-    // Check cache first
-    const cachedResult = this.getFromCache(cacheKey);
+    // Check multi-level cache first
+    const cachedResult = await this.multiLevelCache.get<string>(content, 'gmm');
     if (cachedResult) {
+      metricsCollector.recordCacheHit();
+      console.log(`💾 Multi-level cache hit for GMM analysis`);
       return cachedResult;
     }
+    
+    // Check legacy cache
+    const legacyCachedResult = this.getFromCache(cacheKey);
+    if (legacyCachedResult) {
+      // Promote to multi-level cache
+      await this.multiLevelCache.set(content, legacyCachedResult, { 
+        namespace: 'gmm', 
+        ttl: AI_CONFIG.CACHE_TTL,
+        tags: ['analysis', 'gmm']
+      });
+      metricsCollector.recordCacheHit();
+      return legacyCachedResult;
+    }
 
+    metricsCollector.recordCacheMiss();
     console.log(`📧 Analyzing email content (${content.length} characters)`);
     
     const prompt = `Analyze the following email content and tag problematic elements:
@@ -255,12 +341,28 @@ Please identify and tag:
 Return the tagged content:`;
 
     try {
-      const result = await this.makeOllamaRequest(this.gmmClient, AI_CONFIG.GMM_MODEL, prompt);
+      // Use load balancer for the request
+      const result = await this.gmmLoadBalancer.makeRequest<{ response: string }>(
+        '/api/generate',
+        {
+          model: AI_CONFIG.GMM_MODEL,
+          prompt,
+          stream: false,
+        }
+      );
       
-      // Cache the result
-      this.setCache(cacheKey, result);
+      const analysisResult = result.response.trim();
       
-      return result;
+      // Cache in both systems
+      this.setCache(cacheKey, analysisResult);
+      await this.multiLevelCache.set(content, analysisResult, { 
+        namespace: 'gmm', 
+        ttl: AI_CONFIG.CACHE_TTL,
+        tags: ['analysis', 'gmm'],
+        layer: 'L2' // Store analysis results in L2 cache
+      });
+      
+      return analysisResult;
     } catch (error) {
       console.error('📧 Email analysis failed:', error);
       throw error;
@@ -270,12 +372,28 @@ Return the tagged content:`;
   async fixEmail(taggedContent: string): Promise<string> {
     const cacheKey = this.getCacheKey(taggedContent, AI_CONFIG.FMM_MODEL);
     
-    // Check cache first
-    const cachedResult = this.getFromCache(cacheKey);
+    // Check multi-level cache first
+    const cachedResult = await this.multiLevelCache.get<string>(taggedContent, 'fmm');
     if (cachedResult) {
+      metricsCollector.recordCacheHit();
+      console.log(`💾 Multi-level cache hit for FMM fix`);
       return cachedResult;
     }
+    
+    // Check legacy cache
+    const legacyCachedResult = this.getFromCache(cacheKey);
+    if (legacyCachedResult) {
+      // Promote to multi-level cache
+      await this.multiLevelCache.set(taggedContent, legacyCachedResult, { 
+        namespace: 'fmm', 
+        ttl: AI_CONFIG.CACHE_TTL,
+        tags: ['fix', 'fmm']
+      });
+      metricsCollector.recordCacheHit();
+      return legacyCachedResult;
+    }
 
+    metricsCollector.recordCacheMiss();
     console.log(`🔧 Fixing tagged content (${taggedContent.length} characters)`);
     
     const prompt = `Fix the following tagged email content by providing improvements:
@@ -294,12 +412,28 @@ Focus on:
 Provide the improvements:`;
 
     try {
-      const result = await this.makeOllamaRequest(this.fmmClient, AI_CONFIG.FMM_MODEL, prompt);
+      // Use load balancer for the request
+      const result = await this.fmmLoadBalancer.makeRequest<{ response: string }>(
+        '/api/generate',
+        {
+          model: AI_CONFIG.FMM_MODEL,
+          prompt,
+          stream: false,
+        }
+      );
       
-      // Cache the result
-      this.setCache(cacheKey, result);
+      const fixResult = result.response.trim();
       
-      return result;
+      // Cache in both systems
+      this.setCache(cacheKey, fixResult);
+      await this.multiLevelCache.set(taggedContent, fixResult, { 
+        namespace: 'fmm', 
+        ttl: AI_CONFIG.CACHE_TTL,
+        tags: ['fix', 'fmm'],
+        layer: 'L2' // Store fix results in L2 cache
+      });
+      
+      return fixResult;
     } catch (error) {
       console.error('🔧 Email fix failed:', error);
       throw error;
@@ -359,29 +493,56 @@ Provide the improvements:`;
     const results = { gmm: false, fmm: false };
 
     try {
-      await this.gmmClient.get('/api/tags', { timeout: 5000 });
-      results.gmm = true;
-      console.log('✅ GMM model is healthy');
+      // Check GMM instances through load balancer
+      const gmmStats = this.gmmLoadBalancer.getStats();
+      results.gmm = gmmStats.healthyInstances > 0;
+      
+      if (results.gmm) {
+        console.log(`✅ GMM models are healthy (${gmmStats.healthyInstances}/${gmmStats.totalInstances} instances)`);
+      } else {
+        console.error(`❌ No healthy GMM instances (0/${gmmStats.totalInstances})`);
+      }
     } catch (error) {
-      console.error('❌ GMM model health check failed:', (error as Error).message);
+      console.error('❌ GMM health check failed:', (error as Error).message);
     }
 
     try {
-      await this.fmmClient.get('/api/tags', { timeout: 5000 });
-      results.fmm = true;
-      console.log('✅ FMM model is healthy');
+      // Check FMM instances through load balancer
+      const fmmStats = this.fmmLoadBalancer.getStats();
+      results.fmm = fmmStats.healthyInstances > 0;
+      
+      if (results.fmm) {
+        console.log(`✅ FMM models are healthy (${fmmStats.healthyInstances}/${fmmStats.totalInstances} instances)`);
+      } else {
+        console.error(`❌ No healthy FMM instances (0/${fmmStats.totalInstances})`);
+      }
     } catch (error) {
-      console.error('❌ FMM model health check failed:', (error as Error).message);
+      console.error('❌ FMM health check failed:', (error as Error).message);
     }
 
     return results;
   }
 
   // Get cache statistics
-  getCacheStats(): { size: number; hitRate: number } {
+  getCacheStats(): { 
+    size: number; 
+    hitRate: number;
+    multiLevel: any;
+    loadBalancer: {
+      gmm: any;
+      fmm: any;
+    };
+  } {
+    const multiLevelStats = this.multiLevelCache.getStats();
+    
     return {
       size: this.cache.size,
-      hitRate: 0, // Would need to track hits/misses for accurate rate
+      hitRate: multiLevelStats.hitRate,
+      multiLevel: multiLevelStats,
+      loadBalancer: {
+        gmm: this.gmmLoadBalancer.getStats(),
+        fmm: this.fmmLoadBalancer.getStats(),
+      },
     };
   }
 
@@ -407,7 +568,16 @@ Provide the improvements:`;
       this.processBatch();
     }
 
-    // Clear cache
+    // Shutdown load balancers
+    await Promise.all([
+      this.gmmLoadBalancer.shutdown(),
+      this.fmmLoadBalancer.shutdown(),
+    ]);
+
+    // Shutdown multi-level cache
+    await this.multiLevelCache.shutdown();
+
+    // Clear legacy cache
     this.clearCache();
 
     // Destroy connection pool

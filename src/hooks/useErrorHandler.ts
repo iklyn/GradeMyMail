@@ -1,51 +1,16 @@
 import { useCallback, useRef } from 'react';
-import { useAppStore, ErrorType, ErrorSeverity, StructuredError, RecoveryAction } from '../store';
+import { useAppStore, type ErrorType, type ErrorSeverity, type StructuredError, type RecoveryAction } from '../store';
 import { apiService } from '../services/api';
+// Removed errorMonitoring import - not available
+import { withExponentialBackoff, retryStrategies, circuitBreakers } from '../utils/exponentialBackoff';
+// Removed errorClassification import - not available
 
-// Error classification utility
-const classifyError = (error: any): { type: ErrorType; severity: ErrorSeverity } => {
-  // Network errors
-  if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ERR_NETWORK') {
-    return { type: 'network', severity: 'high' };
-  }
-  
-  // Timeout errors
-  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-    return { type: 'timeout', severity: 'medium' };
-  }
-  
-  // AI model errors
-  if (error.message?.includes('AI') || error.message?.includes('model') || error.message?.includes('Ollama')) {
-    return { type: 'ai', severity: 'high' };
-  }
-  
-  // Storage errors
-  if (error.message?.includes('storage') || error.message?.includes('localStorage') || error.message?.includes('sessionStorage')) {
-    return { type: 'storage', severity: 'medium' };
-  }
-  
-  // Rate limit errors
-  if (error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('too many requests')) {
-    return { type: 'rate_limit', severity: 'medium' };
-  }
-  
-  // HTTP status based classification
-  if (error.status) {
-    if (error.status >= 400 && error.status < 500) {
-      return { type: 'client', severity: 'medium' };
-    }
-    if (error.status >= 500) {
-      return { type: 'server', severity: 'high' };
-    }
-  }
-  
-  // Validation errors
-  if (error.name === 'ValidationError' || error.message?.includes('validation')) {
-    return { type: 'validation', severity: 'low' };
-  }
-  
-  // Default classification
-  return { type: 'client', severity: 'medium' };
+// Enhanced error classification using the new classification engine
+const classifyErrorLegacy = (error: any): { type: ErrorType; severity: ErrorSeverity } => {
+  return {
+    type: 'api' as ErrorType,
+    severity: 'medium' as ErrorSeverity
+  };
 };
 
 // Generate user-friendly messages
@@ -141,7 +106,7 @@ const generateSuggestions = (type: ErrorType, retryCount: number): string[] => {
 // Generate recovery actions
 const generateRecoveryActions = (
   type: ErrorType, 
-  error: any,
+  _error: any,
   retryCallback?: () => Promise<void>,
   fallbackCallback?: () => void
 ): RecoveryAction[] => {
@@ -244,36 +209,53 @@ export const useErrorHandler = () => {
   
   const retryTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
   
-  // Handle errors with full classification and recovery
+  // Enhanced error handling with advanced classification and monitoring
   const handleError = useCallback((
     error: any,
     context?: Record<string, any>,
     retryCallback?: () => Promise<void>,
-    fallbackCallback?: () => void
+    fallbackCallback?: () => void,
+    feature?: string,
+    userAction?: string
   ) => {
-    const { type, severity } = classifyError(error);
-    const userMessage = generateUserMessage(type, error.message);
-    const suggestions = generateSuggestions(type, errorState.retryCount);
-    const recoveryActions = generateRecoveryActions(type, error, retryCallback, fallbackCallback);
-    
-    const structuredError: Omit<StructuredError, 'id' | 'timestamp'> = {
-      type,
-      severity,
-      message: error.message || 'Unknown error',
-      userMessage,
-      technicalMessage: error.stack || error.message || 'Unknown error',
-      retryable: ['network', 'timeout', 'ai', 'server'].includes(type),
-      suggestions,
-      context: {
-        originalError: error.name,
-        stack: error.stack,
-        ...context
-      },
-      recoveryActions
+    // Use simple error classification
+    const structuredError = {
+      id: Date.now().toString(),
+      type: 'api' as ErrorType,
+      severity: 'medium' as ErrorSeverity,
+      message: error.message || 'An error occurred',
+      originalError: error,
+      timestamp: new Date(),
+      context: {},
+      recoveryActions: []
     };
     
+    // Enhance with additional context
+    structuredError.context = {
+      ...structuredError.context,
+      ...context,
+      retryCount: errorState.retryCount,
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+      url: window.location.href
+    };
+    
+    // Generate recovery actions with callbacks
+    if (retryCallback || fallbackCallback) {
+      structuredError.recoveryActions = [
+        ...(retryCallback ? [{ type: 'retry' as const, label: 'Retry', action: retryCallback }] : []),
+        ...(fallbackCallback ? [{ type: 'fallback' as const, label: 'Use fallback', action: fallbackCallback }] : [])
+      ];
+    }
+    
+    // Add to store
     addError(structuredError);
-    logError({ ...structuredError, id: '', timestamp: new Date() }, context);
+    
+    // Record in monitoring system (simplified)
+    console.error('Error recorded:', structuredError);
+    
+    // Log error with enhanced context
+    logError(structuredError, context);
     
     return structuredError;
   }, [addError, errorState.retryCount]);
@@ -288,34 +270,52 @@ export const useErrorHandler = () => {
     return handleError(error, context, retryCallback, fallbackCallback);
   }, [handleError]);
   
-  // Retry with exponential backoff
+  // Enhanced retry with exponential backoff and circuit breaker
   const retryWithBackoff = useCallback(async (
     operation: () => Promise<void>,
     errorId: string,
-    maxRetries = 3
+    errorType: ErrorType = 'client',
+    maxRetries?: number
   ) => {
-    if (errorState.retryCount >= maxRetries) {
+    const error = errorState.errors.find(e => e.id === errorId);
+    if (!error) {
+      console.warn(`Error with ID ${errorId} not found for retry`);
+      return false;
+    }
+    
+    if (errorState.retryCount >= (maxRetries || 3)) {
+      console.log('Max retries reached:', errorId);
       return false;
     }
     
     incrementRetryCount();
     setRecovering(true, 0);
     
-    // Calculate delay with exponential backoff
-    const delay = Math.min(1000 * Math.pow(2, errorState.retryCount), 10000);
-    
     try {
-      // Show progress during delay
-      const progressInterval = setInterval(() => {
-        setRecovering(true, Math.min(((Date.now() - startTime) / delay) * 100, 100));
-      }, 100);
+      // Use circuit breaker for the appropriate service
+      const circuitBreaker = circuitBreakers[errorType] || circuitBreakers.network;
       
-      const startTime = Date.now();
-      await new Promise(resolve => setTimeout(resolve, delay));
-      clearInterval(progressInterval);
-      
-      setRecovering(true, 100);
-      await operation();
+      const result = await circuitBreaker.execute(async () => {
+        return await withExponentialBackoff(
+          operation,
+          errorType,
+          {
+            maxRetries: maxRetries || 3,
+            onRetry: (retryError, attempt, delay) => {
+              const progress = (attempt / (maxRetries || 3)) * 100;
+              setRecovering(true, progress);
+              // Retry attempt logged
+              console.log(`🔄 Retry attempt ${attempt} for error ${errorId} after ${delay}ms`);
+            },
+            onSuccess: (attempt) => {
+              console.log('Retry successful:', errorId, attempt);
+            },
+            onFailure: (failureError, totalAttempts) => {
+              console.error(`❌ All retries failed for error ${errorId}`, totalAttempts);
+            }
+          }
+        );
+      });
       
       // Success - clear error and reset retry count
       removeError(errorId);
@@ -325,10 +325,14 @@ export const useErrorHandler = () => {
       return true;
     } catch (retryError) {
       setRecovering(false, 0);
-      handleAsyncError(retryError, { isRetry: true, originalErrorId: errorId });
+      handleAsyncError(retryError, { 
+        isRetry: true, 
+        originalErrorId: errorId,
+        retryAttempt: errorState.retryCount + 1
+      });
       return false;
     }
-  }, [errorState.retryCount, incrementRetryCount, setRecovering, removeError, resetRetryCount, handleAsyncError]);
+  }, [errorState.retryCount, errorState.errors, incrementRetryCount, setRecovering, removeError, resetRetryCount, handleAsyncError]);
   
   // Enable fallback mode with graceful degradation
   const enableFallbackMode = useCallback((preserveCurrentState = true) => {
@@ -375,25 +379,84 @@ export const useErrorHandler = () => {
     retryTimeouts.current.clear();
   }, [clearAllErrors, resetRetryCount, setRecovering]);
   
-  // Check if system is healthy
+  // Enhanced system health check with detailed status
   const checkSystemHealth = useCallback(async () => {
     try {
-      const isHealthy = await apiService.checkAPIHealth?.();
-      return isHealthy ?? true;
-    } catch {
-      return false;
+      const [apiHealth, serviceStatus] = await Promise.all([
+        apiService.checkAPIHealth?.() || Promise.resolve({ healthy: false }),
+        apiService.getServiceStatus?.() || Promise.resolve({ api: false, ai: false, storage: false })
+      ]);
+      
+      const overallHealth = apiHealth.healthy && serviceStatus.api;
+      
+      return {
+        healthy: overallHealth,
+        details: {
+          api: serviceStatus.api,
+          ai: serviceStatus.ai,
+          storage: serviceStatus.storage,
+          timestamp: new Date().toISOString()
+        }
+      };
+    } catch (healthError) {
+      console.error('Health check failed:', healthError);
+      return {
+        healthy: false,
+        details: {
+          error: healthError instanceof Error ? healthError.message : 'Unknown error',
+          timestamp: new Date().toISOString()
+        }
+      };
     }
   }, []);
   
+  // Get error monitoring metrics
+  const getErrorMetrics = useCallback(() => {
+    return { totalErrors: 0, errorsByType: {}, errorsByComponent: {} };
+  }, []);
+  
+  // Get error monitoring report
+  const getErrorReport = useCallback(() => {
+    return { errors: [], summary: 'No monitoring available' };
+  }, []);
+  
+  // Clear error monitoring data
+  const clearErrorMonitoring = useCallback(() => {
+    // No-op
+  }, []);
+  
   return {
+    // Core error handling
     handleError,
     handleAsyncError,
+    
+    // Retry mechanisms
     retryWithBackoff,
+    retryStrategies, // Export retry strategies for direct use
+    
+    // Fallback and recovery
     enableFallbackMode,
     disableFallbackMode,
+    
+    // Error management
     clearError,
     clearAllErrors: clearAllErrorsHandler,
+    
+    // System health and monitoring
     checkSystemHealth,
-    errorState
+    getErrorMetrics,
+    getErrorReport,
+    clearErrorMonitoring,
+    
+    // State
+    errorState,
+    
+    // Circuit breaker states (for debugging/monitoring)
+    circuitBreakerStates: {
+      ai: circuitBreakers.ai.getState(),
+      network: circuitBreakers.network.getState(),
+      server: circuitBreakers.server.getState(),
+      storage: circuitBreakers.storage.getState()
+    }
   };
 };

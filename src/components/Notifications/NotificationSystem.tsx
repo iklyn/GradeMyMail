@@ -1,235 +1,259 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { utils } from '../../utils/designSystem';
 
 export interface Notification {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'warning' | 'error' | 'info';
   title: string;
   message?: string;
   duration?: number;
-  persistent?: boolean;
   action?: {
     label: string;
     onClick: () => void;
   };
 }
 
-interface NotificationContextType {
+export interface NotificationSystemProps {
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id'>) => string;
-  removeNotification: (id: string) => void;
-  clearAll: () => void;
+  onRemove: (id: string) => void;
+  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center';
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
-
-export const useNotifications = () => {
-  const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
-};
-
-interface NotificationProviderProps {
-  children: React.ReactNode;
-  maxNotifications?: number;
-}
-
-export const NotificationProvider: React.FC<NotificationProviderProps> = ({
-  children,
-  maxNotifications = 5,
+const NotificationSystem: React.FC<NotificationSystemProps> = ({
+  notifications,
+  onRemove,
+  position = 'top-right',
 }) => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const positionClasses = {
+    'top-right': 'top-4 right-4',
+    'top-left': 'top-4 left-4',
+    'bottom-right': 'bottom-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'top-center': 'top-4 left-1/2 transform -translate-x-1/2',
+    'bottom-center': 'bottom-4 left-1/2 transform -translate-x-1/2',
+  };
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
-    const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newNotification: Notification = {
-      ...notification,
-      id,
-      duration: notification.duration ?? 5000,
-    };
-
-    setNotifications(prev => {
-      const updated = [newNotification, ...prev];
-      return updated.slice(0, maxNotifications);
-    });
-
-    // Auto-remove non-persistent notifications
-    if (!newNotification.persistent && newNotification.duration && newNotification.duration > 0) {
-      setTimeout(() => {
-        removeNotification(id);
-      }, newNotification.duration);
+  const getIcon = (type: Notification['type']) => {
+    const iconClasses = 'w-5 h-5';
+    
+    switch (type) {
+      case 'success':
+        return (
+          <svg className={utils.cn(iconClasses, 'text-success-600')} fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'warning':
+        return (
+          <svg className={utils.cn(iconClasses, 'text-warning-600')} fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'error':
+        return (
+          <svg className={utils.cn(iconClasses, 'text-error-600')} fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'info':
+      default:
+        return (
+          <svg className={utils.cn(iconClasses, 'text-primary-600')} fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+        );
     }
+  };
 
-    return id;
-  }, [maxNotifications]);
-
-  const removeNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setNotifications([]);
-  }, []);
-
-  return (
-    <NotificationContext.Provider value={{
-      notifications,
-      addNotification,
-      removeNotification,
-      clearAll,
-    }}>
-      {children}
-      <NotificationContainer />
-    </NotificationContext.Provider>
-  );
-};
-
-const NotificationContainer: React.FC = () => {
-  const { notifications, removeNotification } = useNotifications();
+  const getNotificationClasses = (type: Notification['type']) => {
+    const baseClasses = 'notification';
+    
+    switch (type) {
+      case 'success':
+        return utils.cn(baseClasses, 'notification-success');
+      case 'warning':
+        return utils.cn(baseClasses, 'notification-warning');
+      case 'error':
+        return utils.cn(baseClasses, 'notification-error');
+      case 'info':
+      default:
+        return utils.cn(baseClasses, 'border-primary-200 bg-primary-50/90');
+    }
+  };
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-      {notifications.map(notification => (
-        <NotificationItem
-          key={notification.id}
-          notification={notification}
-          onClose={() => removeNotification(notification.id)}
-        />
-      ))}
+    <div className={utils.cn('fixed z-50 max-w-sm w-full', positionClasses[position])}>
+      <AnimatePresence>
+        {notifications.map((notification, index) => (
+          <NotificationItem
+            key={notification.id}
+            notification={notification}
+            index={index}
+            onRemove={onRemove}
+            getIcon={getIcon}
+            getNotificationClasses={getNotificationClasses}
+          />
+        ))}
+      </AnimatePresence>
     </div>
   );
 };
 
 interface NotificationItemProps {
   notification: Notification;
-  onClose: () => void;
+  index: number;
+  onRemove: (id: string) => void;
+  getIcon: (type: Notification['type']) => React.ReactNode;
+  getNotificationClasses: (type: Notification['type']) => string;
 }
 
-const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onClose }) => {
-  const [isVisible, setIsVisible] = useState(false);
+const NotificationItem: React.FC<NotificationItemProps> = ({
+  notification,
+  index,
+  onRemove,
+  getIcon,
+  getNotificationClasses,
+}) => {
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
-    // Trigger entrance animation
-    const timer = setTimeout(() => setIsVisible(true), 10);
-    return () => clearTimeout(timer);
-  }, []);
+    if (notification.duration && notification.duration > 0) {
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(() => onRemove(notification.id), 300);
+      }, notification.duration);
 
-  const handleClose = () => {
-    setIsVisible(false);
-    setTimeout(onClose, 200); // Wait for exit animation
-  };
-
-  const getTypeStyles = () => {
-    switch (notification.type) {
-      case 'success':
-        return {
-          bg: 'bg-green-50 dark:bg-green-900/20',
-          border: 'border-green-200 dark:border-green-800',
-          icon: 'text-green-600 dark:text-green-400',
-          iconPath: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
-        };
-      case 'error':
-        return {
-          bg: 'bg-red-50 dark:bg-red-900/20',
-          border: 'border-red-200 dark:border-red-800',
-          icon: 'text-red-600 dark:text-red-400',
-          iconPath: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
-        };
-      case 'warning':
-        return {
-          bg: 'bg-yellow-50 dark:bg-yellow-900/20',
-          border: 'border-yellow-200 dark:border-yellow-800',
-          icon: 'text-yellow-600 dark:text-yellow-400',
-          iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
-        };
-      case 'info':
-      default:
-        return {
-          bg: 'bg-blue-50 dark:bg-blue-900/20',
-          border: 'border-blue-200 dark:border-blue-800',
-          icon: 'text-blue-600 dark:text-blue-400',
-          iconPath: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-        };
+      return () => clearTimeout(timer);
     }
+  }, [notification.duration, notification.id, onRemove]);
+
+  const notificationVariants = {
+    initial: {
+      opacity: 0,
+      x: 300,
+      scale: 0.8,
+    },
+    animate: {
+      opacity: 1,
+      x: 0,
+      scale: 1,
+      transition: {
+        duration: 0.4,
+        delay: index * 0.1,
+      },
+    },
+    exit: {
+      opacity: 0,
+      x: 300,
+      scale: 0.8,
+      transition: {
+        duration: 0.3,
+      },
+    },
+    hover: {
+      scale: 1.02,
+      y: -2,
+      transition: {
+        duration: 0.2,
+      },
+    },
   };
 
-  const styles = getTypeStyles();
+  const progressVariants = {
+    initial: { width: '100%' },
+    animate: {
+      width: '0%',
+      transition: {
+        duration: (notification.duration || 5000) / 1000,
+      },
+    },
+  };
 
   return (
-    <div
-      className={`
-        ${styles.bg} ${styles.border} border rounded-lg shadow-lg p-4
-        transform transition-all duration-200 ease-in-out
-        ${isVisible 
-          ? 'translate-x-0 opacity-100 scale-100' 
-          : 'translate-x-full opacity-0 scale-95'
-        }
-      `}
+    <motion.div
+      className={utils.cn(getNotificationClasses(notification.type), 'mb-3 relative overflow-hidden')}
+      variants={notificationVariants}
+      initial="initial"
+      animate={isVisible ? "animate" : "exit"}
+      exit="exit"
+      whileHover="hover"
+      layout
     >
       <div className="flex items-start">
-        <div className="flex-shrink-0">
-          <svg
-            className={`w-5 h-5 ${styles.icon}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d={styles.iconPath}
-            />
-          </svg>
-        </div>
+        <motion.div
+          className="flex-shrink-0 mr-3"
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          {getIcon(notification.type)}
+        </motion.div>
         
-        <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <div className="flex-1 min-w-0">
+          <motion.h4
+            className="text-sm font-semibold text-gray-900 mb-1"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
             {notification.title}
-          </h3>
+          </motion.h4>
+          
           {notification.message && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <motion.p
+              className="text-sm text-gray-600"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.4 }}
+            >
               {notification.message}
-            </p>
+            </motion.p>
           )}
+          
           {notification.action && (
-            <div className="mt-2">
-              <button
-                onClick={notification.action.onClick}
-                className={`
-                  text-sm font-medium ${styles.icon} hover:underline
-                  focus:outline-none focus:underline
-                `}
-              >
-                {notification.action.label}
-              </button>
-            </div>
+            <motion.button
+              className="mt-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors duration-200"
+              onClick={notification.action.onClick}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {notification.action.label}
+            </motion.button>
           )}
         </div>
         
-        <div className="ml-4 flex-shrink-0">
-          <button
-            onClick={handleClose}
-            className="
-              inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
-              focus:outline-none focus:text-gray-600 dark:focus:text-gray-300
-              transition-colors duration-150
-            "
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+        <motion.button
+          className="flex-shrink-0 ml-3 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          onClick={() => {
+            setIsVisible(false);
+            setTimeout(() => onRemove(notification.id), 300);
+          }}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.6 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </motion.button>
       </div>
-    </div>
+      
+      {notification.duration && notification.duration > 0 && (
+        <motion.div
+          className="absolute bottom-0 left-0 h-1 bg-current opacity-30"
+          variants={progressVariants}
+          initial="initial"
+          animate="animate"
+        />
+      )}
+    </motion.div>
   );
 };
 
-export default NotificationProvider;
+export default NotificationSystem;

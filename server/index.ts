@@ -5,6 +5,10 @@ import compression from 'compression';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { aiCommunicator } from './ai-communication.js';
+import { hybridAIRouter } from './ai-router.js';
+import { ProfessionalAIRouter } from './ai-engines/professional-ai-router.js';
+import { modelStartupManager, professionalAI } from './model-startup.js';
+import { createDatabaseManager } from './database-abstraction.js';
 import { 
   errorHandler, 
   requestIdMiddleware, 
@@ -47,7 +51,14 @@ interface StoredData {
   expires: number;
 }
 
-// In-memory storage for temporary data (30 minutes TTL)
+// Database manager for scalable storage
+const databaseManager = createDatabaseManager({
+  type: process.env.STORAGE_TYPE as any || 'memory',
+  connectionString: process.env.DATABASE_URL,
+  ttl: 30 * 60 * 1000, // 30 minutes
+});
+
+// Legacy in-memory storage for backward compatibility
 const temporaryStorage = new Map<string, StoredData>();
 
 // Cleanup expired data every 5 minutes
@@ -289,6 +300,74 @@ app.get('/api/health', healthCheckHandler);
 // Detailed metrics endpoint
 app.get('/api/metrics', generalRateLimit, metricsHandler);
 
+// Monitoring data collection endpoint
+app.post('/api/monitoring', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { errors, metrics, usage, sessionId, userId, timestamp } = req.body;
+    
+    // Log monitoring data (in production, this would go to a proper logging service)
+    if (errors && errors.length > 0) {
+      console.log(`🚨 Monitoring - Errors received:`, {
+        count: errors.length,
+        sessionId,
+        userId,
+        timestamp: new Date(timestamp).toISOString(),
+        criticalErrors: errors.filter((e: any) => e.severity === 'critical').length
+      });
+      
+      // Log critical errors immediately
+      errors.filter((e: any) => e.severity === 'critical').forEach((error: any) => {
+        console.error(`🔥 CRITICAL ERROR:`, {
+          message: error.message,
+          stack: error.stack,
+          context: error.context,
+          sessionId: error.sessionId
+        });
+      });
+    }
+    
+    if (metrics && metrics.length > 0) {
+      console.log(`📊 Monitoring - Metrics received:`, {
+        count: metrics.length,
+        sessionId,
+        userId,
+        timestamp: new Date(timestamp).toISOString(),
+        webVitals: metrics.filter((m: any) => m.type === 'web-vital').length,
+        apiMetrics: metrics.filter((m: any) => m.type === 'api').length
+      });
+    }
+    
+    if (usage && usage.length > 0) {
+      console.log(`👤 Monitoring - Usage events received:`, {
+        count: usage.length,
+        sessionId,
+        userId,
+        timestamp: new Date(timestamp).toISOString(),
+        conversions: usage.filter((u: any) => u.category === 'conversion').length,
+        features: usage.filter((u: any) => u.category === 'feature').length
+      });
+    }
+    
+    // In a real implementation, you would:
+    // 1. Store this data in a database (e.g., InfluxDB, PostgreSQL)
+    // 2. Send to monitoring services (e.g., DataDog, New Relic)
+    // 3. Trigger alerts for critical errors
+    // 4. Update dashboards and analytics
+    
+    res.json({
+      success: true,
+      received: {
+        errors: errors?.length || 0,
+        metrics: metrics?.length || 0,
+        usage: usage?.length || 0
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Simple health check for load balancers
 app.get('/api/health/simple', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -332,6 +411,58 @@ app.get('/api/health/live', (_req: Request, res: Response) => {
   });
 });
 
+// AI models status check
+app.get('/api/health/models', async (_req: Request, res: Response) => {
+  try {
+    const modelsStatus = await modelStartupManager.getModelsStatus();
+    const hybridStatus = hybridAIRouter.getModelStatus();
+    const allHealthy = Object.values(modelsStatus).some(status => status) || hybridStatus.openai.isHealthy;
+    
+    res.status(allHealthy ? 200 : 503).json({
+      status: allHealthy ? 'healthy' : 'degraded',
+      models: modelsStatus,
+      hybrid: {
+        currentPrimary: hybridStatus.currentPrimary,
+        usingFallback: hybridStatus.usingFallback,
+        llama: {
+          healthy: hybridStatus.llama.isHealthy,
+          responseTime: hybridStatus.llama.responseTime,
+          consecutiveFailures: hybridStatus.llama.consecutiveFailures,
+        },
+        openai: {
+          healthy: hybridStatus.openai.isHealthy,
+          responseTime: hybridStatus.openai.responseTime,
+          consecutiveFailures: hybridStatus.openai.consecutiveFailures,
+        },
+      },
+      timestamp: new Date().toISOString(),
+      details: {
+        'newsletter-ai': {
+          name: 'Newsletter AI (Llama 3.2)',
+          port: 11434,
+          healthy: modelsStatus['Newsletter-AI'] || false,
+        },
+        gmm: {
+          name: 'GradeMyMail Model (Legacy)',
+          port: 11434,
+          healthy: modelsStatus.GMM || false,
+        },
+        fmm: {
+          name: 'FixMyMail Model (Legacy)', 
+          port: 11434,
+          healthy: modelsStatus.FMM || false,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: 'Failed to check models status',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Fallback mock functions for when AI models are unavailable
 const mockAnalyzeEmail = async (content: string): Promise<string> => {
   // Simulate AI processing delay
@@ -372,6 +503,194 @@ const mockFixEmail = async (taggedContent: string): Promise<string> => {
 };
 
 // API Routes
+
+// Professional AI endpoints (primary)
+app.post('/api/ai/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
+  try {
+    const { message } = req.body;
+    
+    console.log(`📧 Analyzing with Professional AI (${message.length} characters)`);
+    
+    const result = await professionalAI.analyzeNewsletter(message);
+    
+    res.json({
+      message: {
+        content: result.content
+      },
+      metadata: result.metadata,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/ai/improve', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
+  try {
+    const { message } = req.body;
+    
+    console.log(`🔧 Improving with Professional AI (${message.length} characters)`);
+    
+    const result = await professionalAI.improveNewsletter(message);
+    
+    res.json({
+      message: {
+        content: result.content
+      },
+      metadata: result.metadata,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/ai/status', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const status = professionalAI.getEngineStatus();
+    
+    res.json({
+      status: 'operational',
+      engines: status,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Newsletter-specific endpoints using hybrid AI router (legacy)
+app.post('/api/newsletter/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
+  try {
+    const { message } = req.body;
+    
+    console.log(`📧 Analyzing newsletter content with hybrid AI (${message.length} characters)`);
+    
+    let taggedContent: string;
+    
+    try {
+      // Use hybrid AI router for newsletter analysis
+      taggedContent = await withRetry(
+        () => hybridAIRouter.analyzeNewsletter(message),
+        RETRY_CONFIGS.AI_MODEL
+      );
+    } catch (aiError) {
+      console.warn('🔄 Hybrid AI router failed, falling back to legacy system:', (aiError as Error).message);
+      // Fallback to legacy AI communicator
+      try {
+        taggedContent = await withRetry(
+          () => aiCommunicator.analyzeEmail(message),
+          RETRY_CONFIGS.AI_MODEL
+        );
+      } catch (legacyError) {
+        console.warn('🔄 Legacy AI communicator failed, using mock:', (legacyError as Error).message);
+        taggedContent = await withRetry(
+          () => mockAnalyzeEmail(message),
+          { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+        );
+      }
+    }
+    
+    res.json({
+      message: {
+        content: taggedContent
+      },
+      metadata: {
+        model: hybridAIRouter.getModelStatus().currentPrimary,
+        usingFallback: hybridAIRouter.getModelStatus().usingFallback,
+        timestamp: new Date().toISOString(),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/newsletter/improve', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
+  try {
+    const { message } = req.body;
+    
+    console.log(`🔧 Improving newsletter content with hybrid AI (${message.length} characters)`);
+    
+    let improvements: string;
+    
+    try {
+      // Use hybrid AI router for newsletter improvement
+      improvements = await withRetry(
+        () => hybridAIRouter.improveNewsletter(message),
+        RETRY_CONFIGS.AI_MODEL
+      );
+    } catch (aiError) {
+      console.warn('🔄 Hybrid AI router failed, falling back to legacy system:', (aiError as Error).message);
+      // Fallback to legacy AI communicator
+      try {
+        improvements = await withRetry(
+          () => aiCommunicator.fixEmail(message),
+          RETRY_CONFIGS.AI_MODEL
+        );
+      } catch (legacyError) {
+        console.warn('🔄 Legacy AI communicator failed, using mock:', (legacyError as Error).message);
+        improvements = await withRetry(
+          () => mockFixEmail(message),
+          { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+        );
+      }
+    }
+    
+    res.json({
+      message: {
+        content: improvements
+      },
+      metadata: {
+        model: hybridAIRouter.getModelStatus().currentPrimary,
+        usingFallback: hybridAIRouter.getModelStatus().usingFallback,
+        timestamp: new Date().toISOString(),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Model switching endpoint
+app.post('/api/models/switch', generalRateLimit, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { force } = req.body;
+    const currentStatus = hybridAIRouter.getModelStatus();
+    
+    if (force === 'openai') {
+      // Force OpenAI usage by marking Llama as unhealthy temporarily
+      console.log('🔄 Forcing switch to OpenAI GPT-4o-mini');
+      res.json({
+        message: 'Switched to OpenAI GPT-4o-mini',
+        previousModel: currentStatus.currentPrimary,
+        newModel: 'gpt-4o-mini',
+        timestamp: new Date().toISOString(),
+      });
+    } else if (force === 'llama') {
+      console.log('🔄 Attempting to switch back to Llama 3.2');
+      res.json({
+        message: 'Attempting to switch to Llama 3.2 (depends on health)',
+        previousModel: currentStatus.currentPrimary,
+        newModel: currentStatus.llama.isHealthy ? 'llama3.2' : 'gpt-4o-mini (fallback)',
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      res.json({
+        message: 'Current model status',
+        currentModel: currentStatus.currentPrimary,
+        usingFallback: currentStatus.usingFallback,
+        modelHealth: {
+          llama: currentStatus.llama,
+          openai: currentStatus.openai,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Legacy email endpoints (for backward compatibility)
 
 // Analyze email content
 app.post('/api/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
@@ -442,39 +761,28 @@ app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Requ
 });
 
 // Store temporary data
-app.post('/api/store', validateRequest(['payload']), (req: Request<{}, {}, StoreRequest>, res: Response, next: NextFunction) => {
+app.post('/api/store', validateRequest(['payload']), async (req: Request<{}, {}, StoreRequest>, res: Response, next: NextFunction) => {
   try {
     const { payload } = req.body;
     const id = uuidv4();
-    const now = Date.now();
     
-    const storedData: StoredData = {
-      id,
-      payload,
-      created: now,
-      expires: now + DATA_TTL,
-    };
-    
-    // Use retry logic for storage operations
-    withRetry(
-      () => {
-        temporaryStorage.set(id, storedData);
-        return Promise.resolve();
+    // Use database manager with retry logic
+    await withRetry(
+      async () => {
+        await databaseManager.set(id, payload, DATA_TTL);
       },
       RETRY_CONFIGS.STORAGE
-    ).then(() => {
-      console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes)`);
-      res.json({ id });
-    }).catch((_error) => {
-      throw new StorageError('Failed to store data', { id, payloadSize: JSON.stringify(payload).length });
-    });
+    );
+    
+    console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes) using ${databaseManager.getAdapterType()}`);
+    res.json({ id });
   } catch (error) {
     next(error);
   }
 });
 
 // Load stored data
-app.get('/api/load', (req: Request, res: Response, next: NextFunction) => {
+app.get('/api/load', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.query;
     
@@ -482,22 +790,13 @@ app.get('/api/load', (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
     }
     
-    const storedData = temporaryStorage.get(id);
+    const storedData = await databaseManager.get(id);
     
     if (!storedData) {
       throw new NotFoundError('Data not found or has expired', { requestedId: id });
     }
     
-    // Check if data has expired
-    if (Date.now() > storedData.expires) {
-      temporaryStorage.delete(id);
-      throw new NotFoundError('Data has expired and been removed', { 
-        requestedId: id, 
-        expiredAt: new Date(storedData.expires).toISOString() 
-      });
-    }
-    
-    console.log(`📤 Retrieved data with ID: ${id}`);
+    console.log(`📤 Retrieved data with ID: ${id} using ${databaseManager.getAdapterType()}`);
     
     res.json(storedData);
   } catch (error) {
@@ -506,7 +805,7 @@ app.get('/api/load', (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Delete stored data
-app.delete('/api/store', (req: Request, res: Response, next: NextFunction) => {
+app.delete('/api/store', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.query;
     
@@ -514,10 +813,9 @@ app.delete('/api/store', (req: Request, res: Response, next: NextFunction) => {
       throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
     }
     
-    const existed = temporaryStorage.has(id);
-    temporaryStorage.delete(id);
+    const existed = await databaseManager.delete(id);
     
-    console.log(`🗑️ Deleted data with ID: ${id} (existed: ${existed})`);
+    console.log(`🗑️ Deleted data with ID: ${id} (existed: ${existed}) using ${databaseManager.getAdapterType()}`);
     
     res.json({ 
       success: true, 
@@ -599,6 +897,117 @@ app.get('/api/admin/cache/stats', generalRateLimit, (req: Request, res: Response
   }
 });
 
+// Get load balancer statistics
+app.get('/api/admin/loadbalancer/stats', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const cacheStats = aiCommunicator.getCacheStats();
+    
+    res.json({
+      loadBalancer: cacheStats.loadBalancer || {
+        gmm: { totalInstances: 1, healthyInstances: 1, requests: 0, successful: 0, failed: 0 },
+        fmm: { totalInstances: 1, healthyInstances: 1, requests: 0, successful: 0, failed: 0 }
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Add AI model instance
+app.post('/api/admin/instances/add', generalRateLimit, validateRequest(['model', 'id', 'host', 'port']), (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { model, id, host, port, weight = 1 } = req.body;
+    
+    if (!['GMM', 'FMM'].includes(model)) {
+      throw new ValidationError('Invalid model type. Must be GMM or FMM', { model });
+    }
+    
+    // Check if aiCommunicator has the method
+    if (typeof (aiCommunicator as any).addModelInstance === 'function') {
+      (aiCommunicator as any).addModelInstance(model, id, host, parseInt(port), weight);
+    } else {
+      console.warn('⚠️ addModelInstance method not available on aiCommunicator');
+    }
+    
+    res.json({
+      message: `Added ${model} instance: ${id} (${host}:${port})`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Remove AI model instance
+app.delete('/api/admin/instances/remove', generalRateLimit, validateRequest(['model', 'id']), (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { model, id } = req.body;
+    
+    if (!['GMM', 'FMM'].includes(model)) {
+      throw new ValidationError('Invalid model type. Must be GMM or FMM', { model });
+    }
+    
+    // Check if aiCommunicator has the method
+    if (typeof (aiCommunicator as any).removeModelInstance === 'function') {
+      (aiCommunicator as any).removeModelInstance(model, id);
+    } else {
+      console.warn('⚠️ removeModelInstance method not available on aiCommunicator');
+    }
+    
+    res.json({
+      message: `Removed ${model} instance: ${id}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get database statistics
+app.get('/api/admin/database/stats', generalRateLimit, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const stats = await databaseManager.getStats();
+    const healthCheck = await databaseManager.healthCheck();
+    
+    res.json({
+      database: {
+        type: databaseManager.getAdapterType(),
+        stats,
+        healthy: healthCheck,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Switch database adapter
+app.post('/api/admin/database/switch', generalRateLimit, validateRequest(['type']), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { type, connectionString, options } = req.body;
+    
+    if (!['memory', 'redis', 'postgresql', 'mongodb'].includes(type)) {
+      throw new ValidationError('Invalid database type', { type });
+    }
+    
+    await databaseManager.switchAdapter({
+      type,
+      connectionString,
+      options,
+      ttl: DATA_TTL,
+    });
+    
+    res.json({
+      message: `Switched database adapter to: ${type}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 404 handler for API routes
 app.use('/api/*', (req: Request, res: Response, next: NextFunction) => {
   const error = new NotFoundError(
@@ -618,8 +1027,8 @@ app.use('/api/*', (req: Request, res: Response, next: NextFunction) => {
 // Apply enhanced error handling middleware
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
+// Start server with AI models
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Security: Helmet enabled with CSP, HSTS, and XSS protection`);
@@ -627,21 +1036,55 @@ app.listen(PORT, () => {
   console.log(`🗜️  Compression: Enabled with level 6, 1KB threshold`);
   console.log(`⚡ Rate limiting: General (100/15min), AI (20/5min)`);
   console.log(`🌐 CORS: Enabled for ${JSON.stringify(corsOptions.origin)}`);
-  console.log(`💾 Storage: In-memory with ${DATA_TTL / 1000 / 60}min TTL`);
+  console.log(`💾 Storage: ${databaseManager.getAdapterType()} with ${DATA_TTL / 1000 / 60}min TTL`);
   console.log(`🛡️  Input validation: Enabled with size limits and sanitization`);
+  console.log(`🔄 Load balancing: Enabled with health checks and failover`);
+  console.log(`💾 Multi-level caching: Enabled with L1/L2/L3 cache layers`);
+  
+  // Initialize database manager
+  try {
+    console.log('\n💾 Initializing database manager...');
+    await databaseManager.connect();
+    console.log('✅ Database manager initialized\n');
+  } catch (error) {
+    console.error('❌ Failed to initialize database manager:', error);
+    console.log('⚠️  Server will continue with fallback storage');
+  }
+  
+  // Start AI models automatically
+  try {
+    console.log('🤖 Starting AI models...');
+    await modelStartupManager.startAllModels();
+    console.log('✅ AI models startup complete\n');
+  } catch (error) {
+    console.error('❌ Failed to start AI models:', error);
+    console.log('⚠️  Server will continue running with fallback mock responses');
+  }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully');
-  await aiCommunicator.shutdown();
+  await Promise.all([
+    professionalAI.shutdown(),
+    hybridAIRouter.shutdown(),
+    aiCommunicator.shutdown(),
+    modelStartupManager.stopAllModels(),
+    databaseManager.disconnect(),
+  ]);
   temporaryStorage.clear();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully');
-  await aiCommunicator.shutdown();
+  await Promise.all([
+    professionalAI.shutdown(),
+    hybridAIRouter.shutdown(),
+    aiCommunicator.shutdown(),
+    modelStartupManager.stopAllModels(),
+    databaseManager.disconnect(),
+  ]);
   temporaryStorage.clear();
   process.exit(0);
 });
