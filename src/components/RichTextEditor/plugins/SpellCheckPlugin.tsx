@@ -21,7 +21,7 @@ export default function SpellCheckPlugin({
   const [editor] = useLexicalComposerContext();
   const [spellingErrors, setSpellingErrors] = useState<SpellingError[]>([]);
 
-  console.log('SpellCheckPlugin: Initialized with enabled:', enabled, 'callback:', !!onSpellingSuggestion);
+  // Initialize spell check plugin
 
   // Simple spell check implementation using browser's built-in capabilities
   const checkSpelling = useCallback(async (text: string): Promise<SpellingError[]> => {
@@ -136,11 +136,8 @@ export default function SpellCheckPlugin({
         editorState.read(async () => {
           try {
             const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
-            console.log('SpellCheck: Checking text:', textContent.substring(0, 50) + '...');
-            
             if (textContent.trim()) {
               const errors = await checkSpelling(textContent);
-              console.log('SpellCheck: Found errors:', errors);
               setSpellingErrors(errors);
               
               // Notify parent component about spelling issues
@@ -150,13 +147,9 @@ export default function SpellCheckPlugin({
                   index === self.findIndex(e => e.word.toLowerCase() === error.word.toLowerCase())
                 );
                 
-                console.log('SpellCheck: Sending unique errors:', uniqueErrors);
                 uniqueErrors.forEach(error => {
-                  console.log('SpellCheck: Calling callback for:', error.word, error.suggestions);
                   onSpellingSuggestion(error.word, error.suggestions);
                 });
-              } else {
-                console.log('SpellCheck: No callback provided');
               }
             }
           } catch (error) {
@@ -182,9 +175,7 @@ export default function SpellCheckPlugin({
     const handleContextMenu = (_event: MouseEvent) => {
       // In a full implementation, you'd show a context menu with suggestions
       // For now, we'll just log the spelling errors
-      if (spellingErrors.length > 0) {
-        console.log('Spelling errors found:', spellingErrors);
-      }
+      // Handle spelling errors if needed
     };
 
     editorElement.addEventListener('contextmenu', handleContextMenu);
@@ -207,7 +198,7 @@ export function GrammarCheckPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
 
-  console.log('GrammarCheckPlugin: Initialized with enabled:', enabled, 'callback:', !!onGrammarIssue);
+  // Initialize grammar check plugin
 
   useEffect(() => {
     if (!enabled) return;
@@ -255,12 +246,8 @@ export function GrammarCheckPlugin({
       }
       
       // Always call the callback, even with empty array
-      console.log('GrammarCheck: Found issues:', grammarIssues);
       if (onGrammarIssue) {
-        console.log('GrammarCheck: Calling callback with issues:', grammarIssues);
         onGrammarIssue(grammarIssues);
-      } else {
-        console.log('GrammarCheck: No callback provided');
       }
     };
 
@@ -273,7 +260,7 @@ export function GrammarCheckPlugin({
         editorState.read(() => {
           try {
             const textContent = editorState._nodeMap.get('root')?.getTextContent() || '';
-            console.log('GrammarCheck: Checking text:', textContent.substring(0, 50) + '...');
+            // Check grammar
             checkGrammar(textContent);
           } catch (error) {
             console.warn('Grammar check error:', error);

@@ -3,35 +3,57 @@ import React from 'react';
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  variant?: 'default' | 'minimal' | 'ghost';
+  icon?: React.ReactNode;
+  fullWidth?: boolean;
 }
 
 const Input: React.FC<InputProps> = ({
   label,
   error,
+  variant = 'default',
+  icon,
+  fullWidth = true,
   className = '',
   ...props
 }) => {
   const inputClasses = [
     'input',
-    error && 'border-clarity',
+    `input-${variant}`,
+    error && 'input-error',
+    fullWidth && 'w-full',
     className
   ].filter(Boolean).join(' ');
 
+  const containerClasses = [
+    'input-container',
+    fullWidth && 'w-full'
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className="stack-sm">
+    <div className={containerClasses}>
       {label && (
-        <label className="text-small font-medium">
+        <label className="input-label">
           {label}
         </label>
       )}
       
-      <input
-        className={inputClasses}
-        {...props}
-      />
+      <div className="relative">
+        {icon && (
+          <div className="input-icon">
+            {icon}
+          </div>
+        )}
+        
+        <input
+          className={inputClasses}
+          style={{ paddingLeft: icon ? 'var(--space-10)' : undefined }}
+          {...props}
+        />
+      </div>
       
       {error && (
-        <p className="text-caption" style={{ color: 'var(--color-clarity)' }}>
+        <p className="input-error-text">
           {error}
         </p>
       )}

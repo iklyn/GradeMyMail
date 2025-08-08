@@ -142,6 +142,9 @@ const ToolbarPlugin: React.FC = () => {
           }
         }
       });
+    } else {
+      // If clicking the same heading type, convert back to paragraph
+      formatParagraph();
     }
   };
 

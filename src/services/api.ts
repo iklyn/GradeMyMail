@@ -518,4 +518,132 @@ export const apiService = {
   
   // Service status check
   getServiceStatus,
+
+  // Newsletter-specific analysis with hybrid AI routing
+  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<AnalyzeResponse> {
+    const controller = requestManager.createController(requestKey);
+    
+    try {
+      // Validate input
+      if (!content || content.trim().length === 0) {
+        throw new APIError('Content cannot be empty', 'validation', 400);
+      }
+      
+      if (content.length > 50000) { // 50KB limit
+        throw new APIError('Content too large. Please reduce the size and try again.', 'validation', 400);
+      }
+
+      console.log('🚀 Using newsletter-specific hybrid AI endpoint');
+      
+      const response = await withRetry(
+        () => apiClient.post<AnalyzeResponse>(
+          '/newsletter/analyze',
+          { message: content },
+          { signal: controller.signal }
+        ),
+        {
+          ...defaultRetryConfig,
+          retryCondition: (error: AxiosError) => {
+            // Don't retry validation errors
+            if (error.response?.status === 400) return false;
+            return defaultRetryConfig.retryCondition(error);
+          }
+        }
+      );
+      
+      requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.message?.content) {
+        throw new APIError('Invalid response from newsletter analysis service', 'ai', 502);
+      }
+      
+      return response.data;
+    } catch (error) {
+      requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          contentLength: content.length,
+          requestKey,
+          operation: 'analyzeNewsletter'
+        };
+      }
+      
+      throw error;
+    }
+  },
+
+  // Newsletter-specific improvement with hybrid AI routing
+  async improveNewsletter(taggedContent: string, requestKey = 'newsletter-improve'): Promise<FixResponse> {
+    const controller = requestManager.createController(requestKey);
+    
+    try {
+      // Validate input
+      if (!taggedContent || taggedContent.trim().length === 0) {
+        throw new APIError('Tagged content cannot be empty', 'validation', 400);
+      }
+
+      // Check if content has valid tags
+      const tagRegex = /<(fluff|spam_words|hard_to_read)>.*?<\/\1>/g;
+      if (!tagRegex.test(taggedContent)) {
+        throw new APIError('No valid tags found in content. Please analyze the content first.', 'validation', 400);
+      }
+
+      console.log('🚀 Using newsletter-specific hybrid AI improvement endpoint');
+
+      const response = await withRetry(
+        () => apiClient.post<FixResponse>(
+          '/newsletter/improve',
+          { message: taggedContent },
+          { signal: controller.signal }
+        ),
+        {
+          ...defaultRetryConfig,
+          retries: 2, // Fewer retries for fix operations
+          retryCondition: (error: AxiosError) => {
+            // Don't retry validation errors or client errors
+            if (error.response?.status && error.response.status < 500) return false;
+            return defaultRetryConfig.retryCondition(error);
+          }
+        }
+      );
+      
+      requestManager.cleanup(requestKey);
+      
+      // Validate response
+      if (!response.data?.message?.content) {
+        throw new APIError('Invalid response from newsletter improvement service', 'ai', 502);
+      }
+      
+      return response.data;
+    } catch (error) {
+      requestManager.cleanup(requestKey);
+      
+      // Enhanced error context
+      if (error instanceof APIError) {
+        error.context = {
+          ...error.context,
+          taggedContentLength: taggedContent.length,
+          requestKey,
+          operation: 'improveNewsletter'
+        };
+      }
+      
+      throw error;
+    }
+  },
+
+  // Get AI models status
+  async getModelsStatus(): Promise<any> {
+    try {
+      const response = await apiClient.get('/health/models', { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      console.warn('Failed to get models status:', error);
+      return { status: 'unknown', models: {}, hybrid: {} };
+    }
+  },
 };

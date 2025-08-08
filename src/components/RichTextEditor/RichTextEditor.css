@@ -1,23 +1,32 @@
-/* Apple-inspired Rich Text Editor */
+/* Apple-inspired Rich Text Editor with enhanced animations */
 .rich-text-editor {
   font-family: var(--font-system);
   background: var(--color-background);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateZ(0); /* Enable GPU acceleration */
+  backface-visibility: hidden;
+}
+
+.rich-text-editor:hover {
+  border-color: var(--color-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .rich-text-editor:focus-within {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 8px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .editor-container {
   position: relative;
 }
 
-/* Minimal toolbar */
+/* Minimal toolbar with enhanced animations */
 .toolbar {
   display: flex;
   align-items: center;
@@ -27,6 +36,7 @@
   background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   flex-wrap: wrap;
+  transition: background-color 0.3s ease;
 }
 
 .toolbar-item {
@@ -40,13 +50,37 @@
   color: var(--color-text-secondary);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: var(--text-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.toolbar-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-sm);
+  transform: scale(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toolbar-item:hover:not(:disabled) {
-  background: var(--color-surface-secondary);
   color: var(--color-text-primary);
+  transform: translateY(-1px);
+}
+
+.toolbar-item:hover:not(:disabled)::before {
+  transform: scale(1);
+}
+
+.toolbar-item:active:not(:disabled) {
+  transform: translateY(0);
+  transition: all 0.1s ease;
 }
 
 .toolbar-item:disabled {
@@ -57,6 +91,17 @@
 .toolbar-item.active {
   background: var(--color-accent);
   color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+}
+
+.toolbar-item.active::before {
+  display: none;
+}
+
+.toolbar-item > * {
+  position: relative;
+  z-index: 1;
 }
 
 .divider {
@@ -83,6 +128,7 @@
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Ensure proper text flow for all text elements */
@@ -92,23 +138,29 @@
   overflow-wrap: break-word;
 }
 
-/* Prevent character-by-character line breaks */
-.editor-input p,
-.editor-input div,
-.editor-input span {
-  display: inline-block;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  width: auto;
-  max-width: 100%;
-}
-
-/* Ensure paragraphs are block-level */
+/* Enable natural text wrapping */
 .editor-input p {
   display: block;
   margin: 0;
   padding: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+}
+
+.editor-input div,
+.editor-input span {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Ensure line breaks are visible */
+.editor-input br {
+  display: block;
+  margin: 0;
+  line-height: 1.7;
 }
 
 /* Force proper text rendering and prevent character splitting */
@@ -141,13 +193,42 @@
   position: absolute;
   top: var(--space-8);
   left: var(--space-8);
-  color: #cccccc;
+  color: #888888;
   pointer-events: none;
   font-size: 18px;
   font-family: var(--font-system);
-  font-weight: 300;
-  opacity: 0.6;
+  font-weight: 400;
+  opacity: 1;
   user-select: none;
+  transition: all 0.3s ease;
+  transform: translateZ(0);
+  z-index: 10;
+}
+
+/* JavaScript-controlled placeholder */
+.editor-placeholder-js {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-8);
+  color: #888888;
+  pointer-events: none;
+  font-size: 18px;
+  font-family: var(--font-system);
+  font-weight: 400;
+  opacity: 1;
+  user-select: none;
+  z-index: 10;
+}
+
+/* Only hide placeholder when there's actual text content */
+.editor-input:focus + .editor-placeholder {
+  opacity: 0.5;
+}
+
+/* Hide placeholder only when there's meaningful text content */
+.editor-input[data-lexical-text] + .editor-placeholder {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 /* Clean content styles */

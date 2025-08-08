@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getRoot, $createParagraphNode } from 'lexical';
+import { $getRoot } from 'lexical';
 
 /**
  * Plugin to ensure clean empty state without HTML markup showing as text
@@ -9,30 +9,19 @@ const CleanEmptyStatePlugin: React.FC = () => {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // Initialize with clean empty state
+    // Initialize with clean empty state - don't create empty paragraph initially
     editor.update(() => {
       const root = $getRoot();
       const children = root.getChildren();
       
-      // If root is empty or has problematic content, create clean paragraph
-      if (children.length === 0) {
-        const paragraph = $createParagraphNode();
-        root.append(paragraph);
-      } else {
-        // Check for any text nodes that contain HTML markup
-        children.forEach(child => {
-          const textContent = child.getTextContent();
-          if (textContent.includes('<') && textContent.includes('>')) {
-            // Remove nodes with HTML markup
-            child.remove();
-            // Add clean paragraph if root becomes empty
-            if (root.getChildren().length === 0) {
-              const paragraph = $createParagraphNode();
-              root.append(paragraph);
-            }
-          }
-        });
-      }
+      // Only clean up if there's problematic content, don't create empty paragraph
+      children.forEach(child => {
+        const textContent = child.getTextContent();
+        if (textContent.includes('<') && textContent.includes('>')) {
+          // Remove nodes with HTML markup
+          child.remove();
+        }
+      });
     });
 
     // Listen for editor updates to clean up any HTML markup that appears as text
@@ -50,11 +39,7 @@ const CleanEmptyStatePlugin: React.FC = () => {
             
             editor.update(() => {
               child.remove();
-              // Ensure we have at least one clean paragraph
-              if (root.getChildren().length === 0) {
-                const paragraph = $createParagraphNode();
-                root.append(paragraph);
-              }
+              // Don't automatically create empty paragraph - let placeholder show
             });
           }
         });

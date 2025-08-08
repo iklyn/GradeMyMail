@@ -22,13 +22,13 @@ const KeyboardShortcutsPlugin: React.FC = () => {
       // Check for Ctrl/Cmd key (cross-platform)
       const isModifierPressed = ctrlKey || metaKey;
 
-      console.log('KeyboardShortcuts: Key pressed:', { key, ctrlKey, metaKey, shiftKey, isModifierPressed });
+      // Handle keyboard shortcuts
 
       if (isModifierPressed) {
         switch (key.toLowerCase()) {
           case 'b': {
             // Bold (Ctrl/Cmd + B)
-            console.log('KeyboardShortcuts: Applying bold');
+            // Apply bold formatting
             event.preventDefault();
             event.stopPropagation();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
@@ -36,7 +36,7 @@ const KeyboardShortcutsPlugin: React.FC = () => {
           }
           case 'i': {
             // Italic (Ctrl/Cmd + I)
-            console.log('KeyboardShortcuts: Applying italic');
+            // Apply italic formatting
             event.preventDefault();
             event.stopPropagation();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
@@ -44,7 +44,7 @@ const KeyboardShortcutsPlugin: React.FC = () => {
           }
           case 'u': {
             // Underline (Ctrl/Cmd + U)
-            console.log('KeyboardShortcuts: Applying underline');
+            // Apply underline formatting
             event.preventDefault();
             event.stopPropagation();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
@@ -139,16 +139,14 @@ const KeyboardShortcutsPlugin: React.FC = () => {
     };
 
     const editorElement = editor.getRootElement();
-    console.log('KeyboardShortcuts: Editor element found:', !!editorElement);
+    // Setup keyboard shortcuts
     
     if (editorElement) {
       // Add event listener with capture to ensure we get the events first
       editorElement.addEventListener('keydown', handleKeyDown, true);
-      console.log('KeyboardShortcuts: Event listener attached');
       
       return () => {
         editorElement.removeEventListener('keydown', handleKeyDown, true);
-        console.log('KeyboardShortcuts: Event listener removed');
       };
     } else {
       console.warn('KeyboardShortcuts: No editor element found');

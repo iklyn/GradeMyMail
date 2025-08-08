@@ -14,33 +14,27 @@ app.use(cors({
 app.use(express.json());
 
 // Mock analysis function
-const mockAnalyzeEmail = (content) => {
+// Load professional rule-based AI
+let ruleBasedAnalysis;
+try {
+  const aiModule = require('./ai-engines/rule-based-ai-cjs.cjs');
+  ruleBasedAnalysis = aiModule.ruleBasedAnalysis;
+  console.log('✅ Rule-based AI module loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load rule-based AI:', error);
+  process.exit(1);
+}
+
+const mockAnalyzeEmail = async (content) => {
   try {
     if (!content || typeof content !== 'string') {
       return content || '';
     }
     
-    // Add some mock tags for demonstration
-    let taggedContent = content;
-    
-    // Add some mock tags
-    taggedContent = taggedContent.replace(/\b(amazing|incredible|fantastic|great|awesome)\b/gi, '<fluff>$1</fluff>');
-    taggedContent = taggedContent.replace(/\b(free|urgent|act now|limited time|buy now)\b/gi, '<spam_words>$1</spam_words>');
-    
-    // Mark long sentences as hard to read
-    const sentences = content.split(/[.!?]+/);
-    sentences.forEach(sentence => {
-      if (sentence.trim().split(' ').length > 20) {
-        const trimmed = sentence.trim();
-        if (trimmed.length > 0) {
-          taggedContent = taggedContent.replace(trimmed, `<hard_to_read>${trimmed}</hard_to_read>`);
-        }
-      }
-    });
-    
-    return taggedContent;
+    // Use professional rule-based AI analysis
+    return await ruleBasedAnalysis(content);
   } catch (error) {
-    console.error('Mock analysis error:', error);
+    console.error('Professional analysis error:', error);
     return content;
   }
 };
@@ -78,6 +72,55 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// AI Models health check endpoint (for hybrid AI integration)
+app.get('/api/health/models', (req, res) => {
+  console.log('📊 Models health check requested');
+  
+  const healthResponse = {
+    status: 'healthy',
+    models: {
+      'Newsletter-AI': true,
+      'GMM': true,
+      'FMM': true,
+    },
+    hybrid: {
+      currentPrimary: 'mock-ai',
+      usingFallback: false,
+      llama: {
+        isHealthy: false, // Mock server doesn't have real Llama
+        responseTime: 0,
+        consecutiveFailures: 0,
+      },
+      openai: {
+        isHealthy: true, // Mock server simulates OpenAI
+        responseTime: 150,
+        consecutiveFailures: 0,
+      },
+    },
+    timestamp: new Date().toISOString(),
+    details: {
+      'newsletter-ai': {
+        name: 'Mock Newsletter AI (Development)',
+        port: 3001,
+        healthy: true,
+      },
+      gmm: {
+        name: 'GradeMyMail Model (Mock)',
+        port: 3001,
+        healthy: true,
+      },
+      fmm: {
+        name: 'FixMyMail Model (Mock)', 
+        port: 3001,
+        healthy: true,
+      },
+    },
+  };
+  
+  console.log('✅ Returning healthy status for all models');
+  res.json(healthResponse);
+});
+
 // Analyze endpoint
 app.post('/api/analyze', (req, res) => {
   try {
@@ -99,22 +142,100 @@ app.post('/api/analyze', (req, res) => {
     
     console.log(`📧 Plain text: ${plainText.substring(0, 100)}...`);
     
-    // Simulate processing delay
-    setTimeout(() => {
-      const taggedContent = mockAnalyzeEmail(plainText);
+    // Use professional analysis with minimal delay
+    setTimeout(async () => {
+      const taggedContent = await mockAnalyzeEmail(plainText);
       
-      console.log(`✅ Analysis complete, tagged content: ${taggedContent.substring(0, 100)}...`);
+      console.log(`✅ Analysis complete`);
+      console.log('🔍 === SERVER AI OUTPUT ===');
+      console.log(`📝 Full Tagged Content: ${taggedContent}`);
+      console.log('🔍 === END SERVER OUTPUT ===');
       
       res.json({
         message: {
           content: taggedContent
         }
       });
-    }, 1000);
+    }, 500); // Reduced delay for better UX
     
   } catch (error) {
     console.error('Analysis error:', error);
     res.status(500).json({ error: 'Analysis failed', details: error.message });
+  }
+});
+
+// Newsletter-specific analyze endpoint (for hybrid AI integration)
+app.post('/api/newsletter/analyze', (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    
+    console.log(`📧 Newsletter analysis with hybrid AI (${message.length} characters)`);
+    console.log(`📧 Content preview: ${message.substring(0, 100)}...`);
+    
+    // ARCHITECTURAL CHANGE: Analyze HTML directly instead of converting to plain text
+    console.log(`🎯 Analyzing HTML directly to preserve formatting`);
+    
+    // Use professional analysis with minimal delay - PASS HTML DIRECTLY
+    setTimeout(async () => {
+      const taggedContent = await mockAnalyzeEmail(message); // Pass HTML directly
+      
+      console.log(`✅ Newsletter analysis complete`);
+      console.log('🔍 === SERVER AI OUTPUT ===');
+      console.log('📝 Full Tagged Content:', taggedContent);
+      console.log('🔍 === END SERVER OUTPUT ===');
+      
+      res.json({
+        message: {
+          content: taggedContent
+        },
+        metadata: {
+          model: 'mock-ai',
+          usingFallback: false,
+          timestamp: new Date().toISOString(),
+        }
+      });
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Newsletter analysis error:', error);
+    res.status(500).json({ error: 'Newsletter analysis failed', details: error.message });
+  }
+});
+
+// Newsletter-specific improve endpoint (for hybrid AI integration)
+app.post('/api/newsletter/improve', (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    
+    console.log(`🔧 Newsletter improvement with hybrid AI (${message.length} characters)`);
+    
+    // Simulate processing delay
+    setTimeout(() => {
+      const improvements = mockFixEmail(message);
+      
+      res.json({
+        message: {
+          content: improvements
+        },
+        metadata: {
+          model: 'mock-ai',
+          usingFallback: false,
+          timestamp: new Date().toISOString(),
+        }
+      });
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Newsletter improvement error:', error);
+    res.status(500).json({ error: 'Newsletter improvement failed' });
   }
 });
 
@@ -187,9 +308,31 @@ app.get('/api/load', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Quick server running on port ${PORT}`);
   console.log(`📊 Environment: development`);
   console.log(`🔗 Frontend should connect to: http://localhost:${PORT}`);
   console.log(`✅ Ready to analyze emails!`);
+});
+
+// Keep the server alive and handle errors
+server.on('error', (error) => {
+  console.error('❌ Server error:', error);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down server gracefully...');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });

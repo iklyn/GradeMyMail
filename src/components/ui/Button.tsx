@@ -1,11 +1,12 @@
 import React from 'react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  fullWidth?: boolean;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -16,13 +17,16 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
   children,
   disabled,
+  fullWidth = false,
   ...props
 }) => {
   const baseClasses = [
     'btn',
     `btn-${variant}`,
     `btn-${size}`,
+    fullWidth && 'w-full',
     loading && 'opacity-75 cursor-not-allowed',
+    disabled && 'opacity-50 cursor-not-allowed',
     className
   ].filter(Boolean).join(' ');
 
@@ -41,7 +45,7 @@ const Button: React.FC<ButtonProps> = ({
           <LoadingSpinner />
         ) : (
           <>
-            {icon && <span>{icon}</span>}
+            {icon && <span className="flex items-center">{icon}</span>}
             <span>{children}</span>
           </>
         )}

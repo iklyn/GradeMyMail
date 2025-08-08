@@ -1,18 +1,10 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { vi } from 'vitest';
+import { vi, describe, test, expect } from 'vitest';
 import { ThemeProvider } from '../../components/ThemeProvider';
 import { LoadingProvider } from '../../contexts/LoadingContext';
 import GradeMyMail from '../GradeMyMail';
-import test from 'node:test';
-import test from 'node:test';
-import test from 'node:test';
-import test from 'node:test';
-import test from 'node:test';
-import test from 'node:test';
-import test from 'node:test';
-import { describe } from 'node:test';
 
 // Mock the hooks and components
 vi.mock('../../hooks/useRealTimeAnalysis', () => ({
@@ -45,6 +37,24 @@ vi.mock('../../utils/errorRecovery', () => ({
     restoreState: () => ({ success: false, data: null }),
     preserveState: vi.fn(),
     clearRecoveryData: vi.fn(),
+  },
+}));
+
+// Mock the API service to prevent network calls during testing
+vi.mock('../../services/api', () => ({
+  apiService: {
+    getModelsStatus: vi.fn().mockResolvedValue({
+      status: 'healthy',
+      hybrid: {
+        currentPrimary: 'llama3.2',
+        usingFallback: false,
+      },
+    }),
+    analyzeNewsletter: vi.fn().mockResolvedValue({
+      message: {
+        content: 'Test <fluff>amazing</fluff> content',
+      },
+    }),
   },
 }));
 

@@ -323,7 +323,7 @@ export function classifyError(error: any): StructuredError {
   // HTTP status code based classification
   if (error.response) {
     const statusCode = error.response.status;
-    
+
     // 4xx client errors
     if (statusCode >= 400 && statusCode < 500) {
       return {
@@ -334,9 +334,9 @@ export function classifyError(error: any): StructuredError {
         statusCode: statusCode,
         userMessage: error.response.data?.message || 'The request could not be processed due to client error.',
         technicalMessage: error.message || `HTTP ${statusCode}: ${error.response.statusText}`,
-        context: { 
-          originalError: error.name, 
-          statusCode, 
+        context: {
+          originalError: error.name,
+          statusCode,
           responseData: error.response.data,
           url: error.config?.url
         },
@@ -349,7 +349,7 @@ export function classifyError(error: any): StructuredError {
         ]
       };
     }
-    
+
     // 5xx server errors
     if (statusCode >= 500) {
       return {
@@ -360,9 +360,9 @@ export function classifyError(error: any): StructuredError {
         statusCode: statusCode,
         userMessage: 'The server encountered an error. Please try again later.',
         technicalMessage: error.message || `HTTP ${statusCode}: ${error.response.statusText}`,
-        context: { 
-          originalError: error.name, 
-          statusCode, 
+        context: {
+          originalError: error.name,
+          statusCode,
           responseData: error.response.data,
           url: error.config?.url
         },
@@ -387,7 +387,7 @@ export function classifyError(error: any): StructuredError {
       statusCode: 429,
       userMessage: 'You have made too many requests. Please try again later.',
       technicalMessage: error.message || 'Rate limit exceeded',
-      context: { 
+      context: {
         originalError: error.name,
         retryAfter: error.response?.headers?.['retry-after'] || '60'
       },
@@ -452,7 +452,7 @@ export function formatErrorResponse(error: StructuredError, req: Request): Error
 export async function errorHandler(err: any, req: Request, res: Response, next: NextFunction): Promise<void> {
   // Generate request ID if not present
   const requestId = req.headers['x-request-id'] as string || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   // Classify the error
   const structuredError = classifyError(err);
   structuredError.requestId = requestId;
@@ -509,16 +509,16 @@ export async function errorHandler(err: any, req: Request, res: Response, next: 
 
   // Format and send error response
   const errorResponse = formatErrorResponse(structuredError, req);
-  
+
   // Add retry information if applicable
   if (structuredError.retryable) {
-    const retryAfter = structuredError.type === ErrorType.RATE_LIMIT 
+    const retryAfter = structuredError.type === ErrorType.RATE_LIMIT
       ? parseInt(structuredError.context?.retryAfter || '60', 10)
       : 30; // Default retry after 30 seconds
-      
+
     res.set('Retry-After', retryAfter.toString());
   }
-  
+
   res.status(structuredError.statusCode).json(errorResponse);
 }
 

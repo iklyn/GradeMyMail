@@ -1008,20 +1008,29 @@ app.post('/api/admin/database/switch', generalRateLimit, validateRequest(['type'
   }
 });
 
-// 404 handler for API routes
-app.use('/api/*', (req: Request, res: Response, next: NextFunction) => {
-  const error = new NotFoundError(
-    `API endpoint ${req.method} ${req.path} not found.`,
-    { method: req.method, path: req.path, availableEndpoints: [
-      'GET /api/health',
-      'GET /api/metrics', 
-      'POST /api/analyze',
-      'POST /api/fix',
-      'POST /api/store',
-      'GET /api/load'
-    ]}
-  );
-  next(error);
+// 404 handler for unmatched routes (must be last)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith('/api/')) {
+    const error = new NotFoundError(
+      `API endpoint ${req.method} ${req.path} not found.`,
+      { method: req.method, path: req.path, availableEndpoints: [
+        'GET /api/health',
+        'GET /api/metrics', 
+        'POST /api/analyze',
+        'POST /api/fix',
+        'POST /api/store',
+        'GET /api/load'
+      ]}
+    );
+    next(error);
+  } else {
+    res.status(404).json({
+      error: 'Not Found',
+      message: 'The requested resource was not found',
+      path: req.path,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Apply enhanced error handling middleware
