@@ -101,7 +101,7 @@ export const HighlightedContent: React.FC<HighlightedContentProps> = ({
         lineHeight: '1.7',
         fontSize: '18px', // Match editor font size exactly
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: '#1d1d1f',
+        color: 'inherit', // Use inherited color from parent (will be white in dark mode)
         wordBreak: 'break-word',
         padding: '32px', // Match editor padding exactly
       }}

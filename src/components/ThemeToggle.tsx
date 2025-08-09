@@ -1,82 +1,101 @@
 import React from 'react';
 import { useTheme } from '../hooks/useTheme';
-import { utils } from '../utils/designSystem';
 
 interface ThemeToggleProps {
   className?: string;
-  showLabel?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
 
 export const ThemeToggle: React.FC<ThemeToggleProps> = ({ 
-  className,
-  showLabel = false,
+  className = '',
   size = 'md'
 }) => {
-  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
 
   const sizeClasses = {
-    sm: 'w-8 h-8 text-sm',
-    md: 'w-10 h-10 text-base',
-    lg: 'w-12 h-12 text-lg',
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12',
   };
 
-  const handleThemeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setTheme(e.target.value as 'light' | 'dark' | 'system');
+  const iconSize = {
+    sm: 'w-4 h-4',
+    md: 'w-5 h-5',
+    lg: 'w-6 h-6',
   };
 
   return (
-    <div className={utils.cn('flex items-center gap-2', className)}>
-      {/* Quick toggle button */}
-      <button
-        onClick={toggleTheme}
-        className={utils.cn(
-          'inline-flex items-center justify-center rounded-lg',
-          'bg-surface-secondary hover:bg-surface-elevated',
-          'border border-border-primary hover:border-border-secondary',
-          'text-text-secondary hover:text-text-primary',
-          'transition-all duration-200 ease-smooth',
-          'focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2',
-          sizeClasses[size]
-        )}
-        title={`Switch to ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
+    <button
+      onClick={toggleTheme}
+      className={`
+        ${sizeClasses[size]}
+        inline-flex items-center justify-center
+        bg-white/90 dark:bg-[#2C2C2E]/90
+        backdrop-blur-xl
+        border border-gray-200/60 dark:border-white/5
+        rounded-full
+        text-gray-500 dark:text-[#8E8E93]
+        hover:text-gray-900 dark:hover:text-[#FFFFFF]
+        hover:bg-white dark:hover:bg-[#3A3A3C]
+        hover:border-gray-300 dark:hover:border-white/8
+        hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)]
+        active:scale-95
+        transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1)
+        focus:outline-none focus:ring-2 focus:ring-[#03FF40]/30 focus:ring-offset-2 focus:ring-offset-transparent
+        group
+        gpu-accelerated
+        ${className}
+      `}
+      title={`Switch to ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
+      aria-label={`Switch to ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
+    >
+      {/* Light mode icon (sun) */}
+      <svg 
+        className={`
+          ${iconSize[size]}
+          transition-all duration-300 ease-out
+          ${resolvedTheme === 'light' 
+            ? 'opacity-100 rotate-0 scale-100' 
+            : 'opacity-0 rotate-180 scale-75 absolute'
+          }
+        `}
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+        strokeWidth={2}
       >
-        {resolvedTheme === 'light' ? (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        )}
-      </button>
+        <path 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" 
+        />
+      </svg>
 
-      {/* Detailed theme selector */}
-      {showLabel && (
-        <div className="flex items-center gap-2">
-          <label htmlFor="theme-select" className="text-sm font-medium text-text-secondary">
-            Theme:
-          </label>
-          <select
-            id="theme-select"
-            value={theme}
-            onChange={handleThemeChange}
-            className={utils.cn(
-              'px-3 py-1.5 text-sm rounded-md',
-              'bg-surface-secondary border border-border-primary',
-              'text-text-primary',
-              'focus:outline-none focus:ring-2 focus:ring-border-focus focus:border-border-focus',
-              'transition-colors duration-200'
-            )}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-      )}
-    </div>
+      {/* Dark mode icon (moon) */}
+      <svg 
+        className={`
+          ${iconSize[size]}
+          transition-all duration-300 ease-out
+          ${resolvedTheme === 'dark' 
+            ? 'opacity-100 rotate-0 scale-100' 
+            : 'opacity-0 -rotate-180 scale-75 absolute'
+          }
+        `}
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" 
+        />
+      </svg>
+
+      {/* Premium hover effect */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#03FF40]/10 to-[#00e639]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+    </button>
   );
 };
 

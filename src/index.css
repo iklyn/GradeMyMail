@@ -18,17 +18,17 @@
     --text-2xl: 32px;   /* Page titles */
     --text-3xl: 48px;   /* Large titles */
     
-    /* Minimal color palette */
+    /* Apple-inspired light theme colors */
     --color-background: #ffffff;
-    --color-surface: #fafafa;
-    --color-surface-secondary: #f5f5f5;
-    --color-border: #e0e0e0;
-    --color-border-light: #f0f0f0;
-    --color-text-primary: #1a1a1a;
-    --color-text-secondary: #666666;
-    --color-text-tertiary: #999999;
-    --color-accent: #000000;
-    --color-accent-hover: #333333;
+    --color-surface: #f9f9f9;
+    --color-surface-secondary: #f2f2f7;
+    --color-border: #d1d1d6;
+    --color-border-light: #e5e5ea;
+    --color-text-primary: #1d1d1f;
+    --color-text-secondary: #86868b;
+    --color-text-tertiary: #a1a1a6;
+    --color-accent: #007aff;
+    --color-accent-hover: #0056cc;
     
     /* Issue colors (very subtle) */
     --color-clarity: #ff6b6b;
@@ -61,6 +61,46 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Apple-inspired dark theme colors */
+  .dark {
+    /* Background & Layout */
+    --color-background: #1C1C1E;        /* Primary Background - soft black with warm undertone */
+    --color-surface: #2C2C2E;           /* Secondary Panels/Cards - slightly lighter for contrast */
+    --color-surface-secondary: #3A3A3C; /* Highlight Panel - muted dark gray for separation */
+    
+    /* Borders & Shadows */
+    --color-border: rgba(255, 255, 255, 0.05);      /* Subtle Border - adds depth without clutter */
+    --color-border-light: rgba(255, 255, 255, 0.08); /* Slightly more visible borders */
+    
+    /* Text Colors */
+    --color-text-primary: #FFFFFF;      /* Primary Text - pure white, high contrast */
+    --color-text-secondary: #EBEBF5;    /* Secondary Text - light gray, Apple-style for less emphasis */
+    --color-text-tertiary: #8E8E93;     /* Muted/Placeholder Text - soft gray for placeholders and labels */
+    
+    /* Accent & Highlights */
+    --color-accent: #03FF40;            /* Primary Accent - Vibrant green */
+    --color-accent-hover: #00e639;      /* Darker green for hover states */
+    
+    /* Status Colors */
+    --color-success: #30D158;           /* Success - Apple's green */
+    --color-warning: #FFD60A;           /* Warning - soft yellow, not aggressive */
+    --color-error: #FF453A;             /* Error - Apple red, works beautifully on dark background */
+    
+    /* Apple-style dark mode shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.4);  /* Soft Apple-like glow */
+  }
+
+  /* Smooth theme transitions */
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *:before,
+  .theme-transition *:after {
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition-delay: 0 !important;
   }
 
   html {
@@ -680,9 +720,13 @@
   }
 
   .animate-shimmer {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background: linear-gradient(90deg, transparent 25%, rgba(255, 255, 255, 0.4) 50%, transparent 75%);
     background-size: 200px 100%;
     animation: shimmer 2s infinite;
+  }
+
+  .dark .animate-shimmer {
+    background: linear-gradient(90deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%);
   }
 
   /* Minimal typography utilities */

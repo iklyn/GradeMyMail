@@ -2,7 +2,7 @@
 .rich-text-editor {
   font-family: var(--font-system);
   background: var(--color-background);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid #000000;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -11,15 +11,36 @@
 }
 
 .rich-text-editor:hover {
-  border-color: var(--color-border);
+  border-color: #000000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);
 }
 
 .rich-text-editor:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1), 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: #000000 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1), 0 8px 25px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
+}
+
+/* Force black border in all states - light mode */
+.rich-text-editor,
+.rich-text-editor:hover,
+.rich-text-editor:focus,
+.rich-text-editor:focus-within {
+  border-color: #000000 !important;
+}
+
+/* Force black border in dark mode with higher specificity */
+.dark .rich-text-editor,
+.dark .rich-text-editor:hover,
+.dark .rich-text-editor:focus,
+.dark .rich-text-editor:focus-within,
+html.dark .rich-text-editor,
+html.dark .rich-text-editor:hover,
+html.dark .rich-text-editor:focus,
+html.dark .rich-text-editor:focus-within {
+  border: 1px solid #000000 !important;
+  border-color: #000000 !important;
 }
 
 .editor-container {
@@ -89,10 +110,10 @@
 }
 
 .toolbar-item.active {
-  background: var(--color-accent);
+  background: #000000;
   color: white;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .toolbar-item.active::before {
@@ -123,12 +144,28 @@
   line-height: 1.7;
   color: var(--color-text-primary);
   outline: none;
-  caret-color: var(--color-accent);
+  caret-color: #000000;
+}
+
+/* Dark mode cursor color override */
+.dark .editor-input {
+  caret-color: #03FF40;
   font-family: var(--font-system);
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+/* Black text selection for editor */
+.editor-input::selection {
+  background-color: #000000;
+  color: white;
+}
+
+.editor-input *::selection {
+  background-color: #000000;
+  color: white;
 }
 
 /* Ensure proper text flow for all text elements */

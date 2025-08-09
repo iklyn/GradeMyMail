@@ -1,101 +1,112 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 
-export interface ThemeResponsiveLogoProps {
+interface ThemeResponsiveLogoProps {
   /** Size variant for the logo */
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
   /** Custom className for styling */
   className?: string;
   /** Whether the logo should be clickable for navigation */
   clickable?: boolean;
-  /** Custom click handler */
+  /** Custom click handler - overrides default navigation */
   onClick?: () => void;
   /** Loading state for the logo */
   loading?: boolean;
-  /** Fallback text to display if images fail to load */
-  fallbackText?: string;
+  /** Show fallback text if images fail */
+  showFallbackText?: boolean;
 }
 
 const ThemeResponsiveLogo: React.FC<ThemeResponsiveLogoProps> = ({
-  size = 'lg',
+  size = 'md',
   className = '',
-  clickable = false,
+  clickable = true,
   onClick,
   loading = false,
-  fallbackText = 'GradeMyMail',
+  showFallbackText = true,
 }) => {
+  const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(false);
 
-  // Size configurations
+  // Size configurations with Apple-style proportions
   const sizeConfig = {
     sm: {
-      container: 'h-8',
-      image: 'h-8 w-auto',
-      text: 'text-lg font-light',
+      height: '32px',
+      containerClass: 'h-8',
     },
     md: {
-      container: 'h-10',
-      image: 'h-10 w-auto',
-      text: 'text-xl font-light',
+      height: '40px',
+      containerClass: 'h-10',
     },
     lg: {
-      container: 'h-12',
-      image: 'h-12 w-auto',
-      text: 'text-5xl font-light',
+      height: '48px',
+      containerClass: 'h-12',
     },
     xl: {
-      container: 'h-16',
-      image: 'h-16 w-auto',
-      text: 'text-6xl font-light',
+      height: '64px',
+      containerClass: 'h-16',
+    },
+    hero: {
+      height: '83px',
+      containerClass: 'h-[83px]',
     },
   };
 
   const config = sizeConfig[size];
 
-  // Determine which logo to use based on theme
-  const logoSrc = resolvedTheme === 'dark' ? '/gmm1.png' : '/gmm2.png';
-  
-  // Debug logging
-  React.useEffect(() => {
-    console.log('ThemeResponsiveLogo - Theme:', resolvedTheme, 'Logo src:', logoSrc);
-  }, [resolvedTheme, logoSrc]);
+  // Get the appropriate logo based on theme
+  const logoSrc = resolvedTheme === 'dark' ? `/gmm1.png?v=2024-12-09-new` : '/gmm2.png';
 
   const handleClick = useCallback(() => {
-    if (!clickable || !onClick) return;
-    onClick();
-  }, [clickable, onClick]);
+    if (!clickable) return;
+    
+    if (onClick) {
+      onClick();
+    } else {
+      // Default navigation to home/GradeMyMail
+      navigate('/');
+    }
+  }, [clickable, onClick, navigate]);
 
   const handleImageLoad = useCallback(() => {
-    console.log('ThemeResponsiveLogo - Image loaded successfully:', logoSrc);
+    console.log(`✅ Logo loaded successfully: ${logoSrc}`);
     setImageLoading(false);
     setImageError(false);
   }, [logoSrc]);
 
   const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error('ThemeResponsiveLogo - Image failed to load:', logoSrc, e);
+    console.error(`❌ Logo failed to load: ${logoSrc}`, e);
     setImageError(true);
     setImageLoading(false);
   }, [logoSrc]);
 
-  // Loading skeleton
+  // Loading skeleton with Apple-style shimmer
   const LoadingSkeleton = () => (
-    <div className={`${config.container} bg-gray-200 animate-pulse rounded-lg`} />
+    <div 
+      className={`${config.containerClass} bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse relative overflow-hidden`}
+      style={{ width: 'auto', aspectRatio: '16/9' }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 dark:via-gray-600/20 to-transparent animate-shimmer"></div>
+    </div>
   );
 
-  // Fallback text component
+  // Fallback text with premium styling
   const FallbackText = () => (
-    <h1 className={`${config.text} text-gray-900 tracking-tight transition-all duration-300 hover:scale-105 cursor-default select-none`}>
-      {fallbackText} (FALLBACK)
-    </h1>
+    <div className={`${config.containerClass} flex items-center justify-center`}>
+      <h1 className={`
+        font-light text-gray-900 dark:text-white tracking-tight cursor-default select-none
+        transition-all duration-300 hover:scale-105
+        ${size === 'hero' ? 'text-5xl' : 
+          size === 'xl' ? 'text-3xl' : 
+          size === 'lg' ? 'text-2xl' : 
+          size === 'md' ? 'text-xl' : 'text-lg'}
+      `}>
+        GradeMyMail
+      </h1>
+    </div>
   );
-
-  // Reset image error when theme changes (new image source)
-  React.useEffect(() => {
-    setImageError(false);
-    setImageLoading(true);
-  }, [logoSrc]);
 
   return (
     <div
@@ -115,31 +126,32 @@ const ThemeResponsiveLogo: React.FC<ThemeResponsiveLogoProps> = ({
       } : undefined}
       aria-label={clickable ? 'Navigate to home page' : 'GradeMyMail logo'}
     >
-      {/* Logo Image or Fallback */}
-      <div className={`${config.container} flex items-center justify-center relative`}>
+      {/* Logo Container */}
+      <div className={`${config.containerClass} flex items-center justify-center relative`}>
         {loading || imageLoading ? (
           <LoadingSkeleton />
         ) : imageError ? (
-          <FallbackText />
+          showFallbackText ? <FallbackText /> : null
         ) : (
           <>
             <img
               src={logoSrc}
               alt="GradeMyMail"
               className={`
-                ${config.image} 
-                object-contain
-                transition-all duration-300
-                ${clickable ? 'group-hover:scale-105' : 'hover:scale-105'}
-                animate-fade-in-up
+                w-auto object-contain
+                transition-all duration-300 ease-out
+                ${clickable ? 'group-hover:scale-105 group-active:scale-102' : ''}
+                gpu-accelerated
               `}
+              style={{ height: config.height }}
               onLoad={handleImageLoad}
               onError={handleImageError}
               loading="eager"
             />
-            {/* Hover effect overlay */}
+            
+            {/* Premium hover effect overlay */}
             {clickable && (
-              <div className="absolute inset-0 bg-blue-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg" />
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg pointer-events-none" />
             )}
           </>
         )}
