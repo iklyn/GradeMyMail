@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface LogoProps {
   /** Size variant for the logo */
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'lg-xl' | 'xl';
   /** Whether to show the text alongside the logo */
   showText?: boolean;
   /** Custom className for styling */
@@ -53,6 +53,12 @@ const Logo: React.FC<LogoProps> = ({
       image: 'h-24 w-auto',
       text: 'text-4xl font-bold',
       spacing: 'space-x-6',
+    },
+    'lg-xl': {
+      container: 'h-16',
+      image: 'h-16 w-auto',
+      text: 'text-3xl font-bold',
+      spacing: 'space-x-5',
     },
   };
 

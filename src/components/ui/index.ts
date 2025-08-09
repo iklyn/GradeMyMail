@@ -20,3 +20,6 @@ export { default as GlassPanel } from './GlassPanel';
 export type { GlassPanelProps } from './GlassPanel';
 
 export { default as Logo } from './Logo';
+
+export { default as ThemeResponsiveLogo } from './ThemeResponsiveLogo';
+export type { ThemeResponsiveLogoProps } from './ThemeResponsiveLogo';
