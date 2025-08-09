@@ -9,6 +9,7 @@ import { StatePreservation } from '../utils/errorRecovery';
 import { MinimalPulsePopup } from '../components/LoadingScreen/MinimalLoadingPopup';
 import { InstructionsPopup } from '../components/InstructionsPopup';
 import Logo from '../components/ui/Logo';
+import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
 import { MetricsDisplay, type NewsletterMetrics } from '../components/MetricsDisplay';
 import { calculateNewsletterMetrics } from '../utils/metricsCalculator';
 import { apiService } from '../services/api';
@@ -41,7 +42,7 @@ const GradeMyMail: React.FC = () => {
     usingFallback: false,
     lastChecked: null,
   });
-  
+
   // Container ref for the editor
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
@@ -60,13 +61,13 @@ const GradeMyMail: React.FC = () => {
         console.log('🔍 Checking AI model status...');
         const status = await apiService.getModelsStatus();
         console.log('📊 Received model status:', status);
-        
+
         const isHealthy = status.status === 'healthy';
         const currentModel = status.hybrid?.currentPrimary || 'unknown';
         const usingFallback = status.hybrid?.usingFallback || false;
-        
+
         console.log(`✅ Model status: ${isHealthy ? 'healthy' : 'degraded'}, current: ${currentModel}, fallback: ${usingFallback}`);
-        
+
         setAiModelStatus({
           currentModel,
           isHealthy,
@@ -101,7 +102,7 @@ const GradeMyMail: React.FC = () => {
           setContent(recovery.data.emailContent.originalText || '');
           setHtmlContent(recovery.data.emailContent.originalHTML || '');
         }
-        
+
         StatePreservation.clearRecoveryData();
       } catch (error) {
         console.error('Failed to restore state:', error);
@@ -113,7 +114,7 @@ const GradeMyMail: React.FC = () => {
   // Intelligent fallback analysis when AI systems fail
   const createIntelligentFallbackAnalysis = useCallback((content: string): string => {
     let taggedContent = content;
-    
+
     // Fluff words detection (common filler words)
     const fluffPatterns = [
       /\b(amazing|incredible|fantastic|awesome|great|wonderful|excellent|outstanding|remarkable|extraordinary)\b/gi,
@@ -122,11 +123,11 @@ const GradeMyMail: React.FC = () => {
       /\b(obviously|clearly|definitely|absolutely|certainly|undoubtedly)\b/gi,
       /\b(very|really|quite|extremely|incredibly|tremendously)\b/gi
     ];
-    
+
     fluffPatterns.forEach(pattern => {
       taggedContent = taggedContent.replace(pattern, '<fluff>$&</fluff>');
     });
-    
+
     // Spam words detection (marketing/sales language)
     const spamPatterns = [
       /\b(free|urgent|act now|limited time|don't miss|exclusive|special offer|once in a lifetime)\b/gi,
@@ -135,11 +136,11 @@ const GradeMyMail: React.FC = () => {
       /\b(discount|sale|offer|deal|promotion|bonus|gift|prize)\b/gi,
       /\b(money back|refund|cash|earn|profit|income|opportunity)\b/gi
     ];
-    
+
     spamPatterns.forEach(pattern => {
       taggedContent = taggedContent.replace(pattern, '<spam_words>$&</spam_words>');
     });
-    
+
     // Hard to read detection (complex sentences and jargon)
     const hardToReadPatterns = [
       /\b(synergistic|paradigm|leverage|optimize|maximize|utilize|facilitate|implement|strategize)\b/gi,
@@ -147,11 +148,11 @@ const GradeMyMail: React.FC = () => {
       /\b(innovative|cutting-edge|state-of-the-art|next-generation|revolutionary|disruptive)\b/gi,
       /\b(comprehensive|holistic|integrated|scalable|robust|dynamic|agile|streamlined)\b/gi
     ];
-    
+
     hardToReadPatterns.forEach(pattern => {
       taggedContent = taggedContent.replace(pattern, '<hard_to_read>$&</hard_to_read>');
     });
-    
+
     // Detect overly long sentences (potential readability issues)
     const sentences = taggedContent.split(/[.!?]+/);
     sentences.forEach((sentence, index) => {
@@ -163,30 +164,30 @@ const GradeMyMail: React.FC = () => {
         }
       }
     });
-    
+
     return taggedContent;
   }, []);
 
   // Smart content validation
   const validateContentForAnalysis = useCallback((content: string): { isValid: boolean; reason?: string } => {
     const trimmedContent = content.trim();
-    
+
     // Check minimum length
     if (trimmedContent.length < 10) {
       return { isValid: false, reason: 'Content too short (minimum 10 characters)' };
     }
-    
+
     // Check maximum length
     if (trimmedContent.length > 50000) {
       return { isValid: false, reason: 'Content too long (maximum 50,000 characters)' };
     }
-    
+
     // Check if content looks like email/newsletter content
     const wordCount = trimmedContent.split(/\s+/).filter(word => word.length > 0).length;
     if (wordCount < 5) {
       return { isValid: false, reason: 'Content too short (minimum 5 words)' };
     }
-    
+
     // Check for suspicious patterns that might indicate non-email content
     const codePatterns = [
       /function\s*\(/,
@@ -196,12 +197,12 @@ const GradeMyMail: React.FC = () => {
       /let\s+\w+\s*=/,
       /var\s+\w+\s*=/
     ];
-    
+
     const hasCodePatterns = codePatterns.some(pattern => pattern.test(trimmedContent));
     if (hasCodePatterns) {
       return { isValid: false, reason: 'Content appears to be code rather than email text' };
     }
-    
+
     return { isValid: true };
   }, []);
 
@@ -215,11 +216,11 @@ const GradeMyMail: React.FC = () => {
     }
 
     setIsAnalyzing(true);
-    
+
     try {
       console.log('🔍 Starting newsletter analysis with hybrid AI system...');
       console.log(`📊 Content stats: ${content.length} chars, ${content.split(/\s+/).length} words`);
-      
+
       // Update AI model status before analysis
       const modelStatus = await apiService.getModelsStatus();
       setAiModelStatus({
@@ -228,51 +229,51 @@ const GradeMyMail: React.FC = () => {
         usingFallback: modelStatus.hybrid?.usingFallback || false,
         lastChecked: new Date(),
       });
-      
+
       // Use the newsletter-specific hybrid AI router with custom prompts
       const response = await apiService.analyzeNewsletter(content, 'newsletter-analysis');
-      
+
       console.log('✅ Analysis completed successfully');
       console.log(`🤖 Used model: ${modelStatus.hybrid?.currentPrimary || 'unknown'}`);
-      
+
       // LOG THE EXACT AI OUTPUT FOR DEBUGGING
       console.log('🔍 === RAW AI OUTPUT ===');
       console.log('📄 Full Response Object:', response);
       console.log('📝 Tagged Content (AI Output):', response.message.content);
       console.log('📊 Response Metadata:', response.metadata || 'No metadata');
       console.log('🔍 === END AI OUTPUT ===');
-      
+
       setAnalysisResult(response);
-      
+
       // Calculate metrics from the tagged content
       const calculatedMetrics = calculateNewsletterMetrics(
         response.message.content,
         content
       );
       setMetrics(calculatedMetrics);
-      
+
       setHasContentChanged(false); // Reset the changed flag after analysis
-      
+
       // Update model status after successful analysis
       setAiModelStatus(prev => ({
         ...prev,
         isHealthy: true,
         lastChecked: new Date(),
       }));
-      
+
     } catch (error) {
       console.error('❌ Analysis failed:', error);
-      
+
       // Update model status to indicate failure
       setAiModelStatus(prev => ({
         ...prev,
         isHealthy: false,
         lastChecked: new Date(),
       }));
-      
+
       handleAsyncError(
         error instanceof Error ? error : new Error('Analysis failed'),
-        { 
+        {
           operation: 'manual-analysis',
           contentLength: content.length,
           errorType: error instanceof Error ? error.name : 'Unknown',
@@ -287,14 +288,14 @@ const GradeMyMail: React.FC = () => {
         () => {
           enableFallbackMode(true);
           console.log('🔄 All AI systems failed, using intelligent fallback analysis...');
-          
+
           // Provide intelligent fallback response when all AI systems fail
           const fallbackResponse = {
             message: {
               content: createIntelligentFallbackAnalysis(content)
             }
           };
-          
+
           setAnalysisResult(fallbackResponse);
           const fallbackMetrics = calculateNewsletterMetrics(
             fallbackResponse.message.content,
@@ -312,7 +313,7 @@ const GradeMyMail: React.FC = () => {
   const handleContentChange = useCallback((newContent: string, newHtmlContent: string) => {
     setContent(newContent);
     setHtmlContent(newHtmlContent);
-    
+
     // Mark content as changed if there's an existing analysis
     if (analysisResult) {
       setHasContentChanged(true);
@@ -372,7 +373,7 @@ John`;
     } catch (error) {
       handleAsyncError(
         error instanceof Error ? error : new Error('Navigation failed'),
-        { 
+        {
           operation: 'navigate-to-fixmymail',
           hasContent: !!content,
           hasAnalysis: !!analysisResult
@@ -388,7 +389,7 @@ John`;
     <div className="min-h-screen bg-white">
       {/* Minimal Loading Popup */}
       <MinimalPulsePopup isVisible={isAnalyzing} message="Analyzing your email..." />
-      
+
       {/* Instructions Popup */}
       <InstructionsPopup />
 
@@ -396,14 +397,28 @@ John`;
       <header className="relative">
         <div className="flex items-center justify-center py-16 px-6">
           {/* Logo aligned with title */}
-          <div className="absolute left-6 animate-slide-in-left">
-            <Logo size="lg" showText={false} />
+          <div className="absolute left-20 animate-slide-in-left">
+            <Logo size="lg-xl" showText={false} />
           </div>
-          
-          {/* Centered title */}
-          <h1 className="text-5xl font-light text-gray-900 tracking-tight animate-fade-in-up transition-all duration-300 hover:scale-105 cursor-default select-none">
-            GradeMyMail
-          </h1>
+
+          {/* Centered logo */}
+          <div className="text-center">
+            <img
+              src="/gmm2.png"
+              alt="GradeMyMail"
+              className="w-auto mx-auto animate-fade-in-up transition-all duration-300 hover:scale-105"
+              style={{ height: '83px' }}
+              onError={(e) => {
+                console.error('Logo failed to load');
+                e.currentTarget.style.display = 'none';
+                // Show fallback text
+                const fallback = document.createElement('h1');
+                fallback.className = 'text-5xl font-light text-gray-900 tracking-tight animate-fade-in-up transition-all duration-300 hover:scale-105 cursor-default select-none';
+                fallback.textContent = 'GradeMyMail';
+                e.currentTarget.parentNode?.appendChild(fallback);
+              }}
+            />
+          </div>
         </div>
       </header>
 
@@ -411,7 +426,7 @@ John`;
       <main className="max-w-4xl mx-auto px-6 pb-16">
         {/* Editor Section - Clean and Spacious */}
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all duration-400 hover:shadow-md hover:-translate-y-1 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-          <div 
+          <div
             ref={editorContainerRef}
             className="relative p-8"
           >
@@ -425,7 +440,7 @@ John`;
               enableGrammarCheck={false}
               showValidation={false}
             />
-            
+
             {/* Analysis Results - Show highlighted content when analysis is complete */}
             {analysisResult?.message?.content && !hasContentChanged && (
               <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-lg border border-gray-200 p-4 overflow-auto">
@@ -441,7 +456,7 @@ John`;
                     </svg>
                   </button>
                 </div>
-                <HighlightedContent 
+                <HighlightedContent
                   content={analysisResult.message.content}
                   originalHTML={htmlContent}
                   className="text-sm"
@@ -502,10 +517,10 @@ John`;
             <div className="inline-flex items-center space-x-2 text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
               <div className={`w-2 h-2 rounded-full ${aiModelStatus.isHealthy ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
               <span>
-                {aiModelStatus.usingFallback ? 'Fallback AI' : 
-                 aiModelStatus.currentModel === 'llama3.2' ? 'Local AI' : 
-                 aiModelStatus.currentModel === 'gpt-4o-mini' ? 'Cloud AI' : 
-                 'Hybrid AI'} 
+                {aiModelStatus.usingFallback ? 'Fallback AI' :
+                  aiModelStatus.currentModel === 'llama3.2' ? 'Local AI' :
+                    aiModelStatus.currentModel === 'gpt-4o-mini' ? 'Cloud AI' :
+                      'Hybrid AI'}
                 {!aiModelStatus.isHealthy && ' (Degraded)'}
               </span>
             </div>
@@ -516,7 +531,7 @@ John`;
         {metrics && !hasContentChanged && !isAnalyzing && (
           <div className="mt-12 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="max-w-md mx-auto">
-              <MetricsDisplay 
+              <MetricsDisplay
                 metrics={metrics}
                 className="shadow-lg"
               />
