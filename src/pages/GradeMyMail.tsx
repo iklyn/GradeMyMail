@@ -10,6 +10,7 @@ import { MinimalPulsePopup } from '../components/LoadingScreen/MinimalLoadingPop
 import { InstructionsPopup } from '../components/InstructionsPopup';
 import Logo from '../components/ui/Logo';
 import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { MetricsDisplay, type NewsletterMetrics } from '../components/MetricsDisplay';
 import { calculateNewsletterMetrics } from '../utils/metricsCalculator';
 import { apiService } from '../services/api';
@@ -386,7 +387,7 @@ John`;
   }, [navigate, content, htmlContent, analysisResult, handleAsyncError]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#1C1C1E] transition-colors duration-300">
       {/* Minimal Loading Popup */}
       <MinimalPulsePopup isVisible={isAnalyzing} message="Analyzing your email..." />
 
@@ -396,28 +397,23 @@ John`;
       {/* Minimal Header */}
       <header className="relative">
         <div className="flex items-center justify-center py-16 px-6">
-          {/* Logo aligned with title */}
+          {/* Pick & Partner Logo - Left Side */}
           <div className="absolute left-20 animate-slide-in-left">
             <Logo size="lg-xl" showText={false} />
           </div>
 
-          {/* Centered logo */}
-          <div className="text-center">
-            <img
-              src="/gmm2.png"
-              alt="GradeMyMail"
-              className="w-auto mx-auto animate-fade-in-up transition-all duration-300 hover:scale-105"
-              style={{ height: '83px' }}
-              onError={(e) => {
-                console.error('Logo failed to load');
-                e.currentTarget.style.display = 'none';
-                // Show fallback text
-                const fallback = document.createElement('h1');
-                fallback.className = 'text-5xl font-light text-gray-900 tracking-tight animate-fade-in-up transition-all duration-300 hover:scale-105 cursor-default select-none';
-                fallback.textContent = 'GradeMyMail';
-                e.currentTarget.parentNode?.appendChild(fallback);
-              }}
+          {/* Theme-Responsive GradeMyMail Logo - Center */}
+          <div className="text-center animate-fade-in-up">
+            <ThemeResponsiveLogo
+              size="hero"
+              clickable={true}
+              showFallbackText={true}
             />
+          </div>
+
+          {/* Theme Toggle - Right Side */}
+          <div className="absolute right-20 animate-slide-in-right">
+            <ThemeToggle size="md" />
           </div>
         </div>
       </header>
@@ -425,7 +421,7 @@ John`;
       {/* Main Content - Minimal Layout */}
       <main className="max-w-4xl mx-auto px-6 pb-16">
         {/* Editor Section - Clean and Spacious */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all duration-400 hover:shadow-md hover:-translate-y-1 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+        <div className="bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-white/5 rounded-xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-400 hover:shadow-md dark:hover:shadow-[0_6px_24px_rgba(0,0,0,0.5)] hover:-translate-y-1 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
           <div
             ref={editorContainerRef}
             className="relative p-8"
@@ -443,12 +439,12 @@ John`;
 
             {/* Analysis Results - Show highlighted content when analysis is complete */}
             {analysisResult?.message?.content && !hasContentChanged && (
-              <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-lg border border-gray-200 p-4 overflow-auto">
+              <div className="absolute inset-0 bg-white/95 dark:bg-[#3A3A3C]/95 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-white/5 p-4 overflow-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-700">Analysis Results</h3>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-[#EBEBF5]">Analysis Results</h3>
                   <button
                     onClick={() => setAnalysisResult(null)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-gray-400 hover:text-gray-600 dark:text-[#8E8E93] dark:hover:text-[#EBEBF5] transition-colors"
                     title="Close analysis"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,7 +469,7 @@ John`;
             <button
               onClick={handleAnalyzeClick}
               disabled={isAnalyzing}
-              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white px-8 py-3 rounded-lg font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl disabled:transform-none disabled:shadow-none animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              className="bg-black hover:bg-gray-800 dark:bg-[#03FF40] dark:hover:bg-[#00e639] disabled:bg-gray-400 dark:disabled:bg-[#8E8E93] text-white dark:text-black px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl disabled:transform-none disabled:shadow-none animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-black/50 dark:focus:ring-[#03FF40]/50 focus:ring-offset-2"
             >
               <span className="relative z-10">
                 {isAnalyzing ? 'Analyzing...' : 'Analyze'}
@@ -489,7 +485,7 @@ John`;
             <button
               onClick={handleFixMyMailClick}
               disabled={isAnalyzing || navigationState.isLoading}
-              className="bg-[#ff4500] hover:bg-[#e03e00] text-white px-8 py-3 rounded-lg font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#ff4500] focus:ring-offset-2"
+              className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:ring-offset-2"
               style={{ animationDelay: '0.2s' }}
             >
               <span className="relative z-10">Improve</span>
@@ -503,10 +499,10 @@ John`;
           <div className="text-center mt-8 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
             <button
               onClick={handleSampleEmailClick}
-              className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) hover:scale-110 hover:-translate-y-0.5 relative focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 rounded-md px-2 py-1"
+              className="text-gray-500 hover:text-gray-700 dark:text-[#8E8E93] dark:hover:text-[#EBEBF5] text-sm font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) hover:scale-110 hover:-translate-y-0.5 relative focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 rounded-md px-2 py-1"
             >
               <span className="relative z-10">Try sample</span>
-              <div className="absolute inset-0 bg-gray-100 rounded-md opacity-0 hover:opacity-100 transition-opacity duration-300 -z-10 scale-110"></div>
+              <div className="absolute inset-0 bg-gray-100 dark:bg-gray-700 rounded-md opacity-0 hover:opacity-100 transition-opacity duration-300 -z-10 scale-110"></div>
             </button>
           </div>
         )}
@@ -514,7 +510,7 @@ John`;
         {/* AI Model Status Indicator - Subtle and non-intrusive */}
         {aiModelStatus.lastChecked && (
           <div className="mt-8 text-center animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            <div className="inline-flex items-center space-x-2 text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
+            <div className="inline-flex items-center space-x-2 text-xs text-gray-400 dark:text-[#8E8E93] bg-gray-50 dark:bg-[#2C2C2E] px-3 py-1 rounded-full">
               <div className={`w-2 h-2 rounded-full ${aiModelStatus.isHealthy ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
               <span>
                 {aiModelStatus.usingFallback ? 'Fallback AI' :

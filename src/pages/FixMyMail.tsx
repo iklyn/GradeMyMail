@@ -277,21 +277,21 @@ const FixMyMail: React.FC = () => {
   // Render loading state
   if (state.isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-sm border p-8 max-w-md w-full mx-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#1C1C1E] flex items-center justify-center">
+        <div className="bg-white dark:bg-[#2C2C2E] rounded-lg shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-white/5 p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <h2 className="text-lg font-medium text-gray-900 mb-2">Loading FixMyMail</h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-[#FFFFFF] mb-2">Loading FixMyMail</h2>
+            <p className="text-sm text-gray-600 dark:text-[#EBEBF5] mb-4">
               Preparing your email improvements...
             </p>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-200 dark:bg-[#3A3A3C] rounded-full h-2">
               <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                className="bg-blue-600 dark:bg-[#03FF40] h-2 rounded-full transition-all duration-300"
                 style={{ width: `${state.loadingProgress}%` }}
               ></div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">{state.loadingProgress}% complete</p>
+            <p className="text-xs text-gray-500 dark:text-[#8E8E93] mt-2">{state.loadingProgress}% complete</p>
           </div>
         </div>
       </div>
@@ -301,8 +301,8 @@ const FixMyMail: React.FC = () => {
   // Render error state with enhanced error display
   if (state.error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-sm border p-8 max-w-lg w-full mx-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#1C1C1E] flex items-center justify-center">
+        <div className="bg-white dark:bg-[#2C2C2E] rounded-lg shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-white/5 p-8 max-w-lg w-full mx-4">
           {storeErrorState.currentError ? (
             <ErrorDisplay
               error={storeErrorState.currentError}
@@ -325,8 +325,8 @@ const FixMyMail: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                 </svg>
               </div>
-              <h2 className="text-lg font-medium text-gray-900 mb-2">Unable to Load FixMyMail</h2>
-              <p className="text-sm text-gray-600 mb-6">{state.error}</p>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-[#FFFFFF] mb-2">Unable to Load FixMyMail</h2>
+              <p className="text-sm text-gray-600 dark:text-[#EBEBF5] mb-6">{state.error}</p>
             </div>
           )}
           
@@ -354,15 +354,15 @@ const FixMyMail: React.FC = () => {
 
   // Main FixMyMail interface
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[#1C1C1E] transition-colors duration-300">
       {/* Minimal Header */}
-      <header className="border-b border-gray-200">
+      <header className="border-b border-gray-200 dark:border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               {/* Logo in top-left corner */}
               <Logo size="sm" showText={false} />
-              <div className="h-6 w-px bg-gray-300"></div>
+              <div className="h-6 w-px bg-gray-300 dark:bg-white/8"></div>
               <button
                 onClick={handleBackToGradeMyMail}
                 disabled={navigationState.isLoading}
@@ -370,7 +370,7 @@ const FixMyMail: React.FC = () => {
               >
                 ← Back
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">FixMyMail</h1>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-[#FFFFFF]">FixMyMail</h1>
             </div>
             
             <button
@@ -386,11 +386,11 @@ const FixMyMail: React.FC = () => {
 
       {/* Loading State - minimal */}
       {navigationState.isLoading && (
-        <div className="border-b border-gray-200 bg-gray-50">
+        <div className="border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#2C2C2E]">
           <div className="max-w-7xl mx-auto px-6 py-3">
             <div className="flex items-center space-x-2">
               <div className="loading-spinner"></div>
-              <span className="text-sm text-gray-600">Returning...</span>
+              <span className="text-sm text-gray-600 dark:text-[#EBEBF5]">Returning...</span>
             </div>
           </div>
         </div>
@@ -399,7 +399,7 @@ const FixMyMail: React.FC = () => {
       {/* Main Content - Clean */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {state.emailData && state.improvedContent && (
-          <div className="border border-gray-200 rounded-md overflow-hidden">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
             <VirtualizedDiffViewer
               originalContent={state.emailData.originalText}
               modifiedContent={state.improvedContent}

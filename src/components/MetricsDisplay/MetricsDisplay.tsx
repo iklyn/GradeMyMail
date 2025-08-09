@@ -19,24 +19,24 @@ export interface MetricsDisplayProps {
 // Helper function to get grade color
 const getGradeColor = (grade: string): string => {
   switch (grade) {
-    case 'A': return 'text-green-600';
-    case 'B': return 'text-blue-600';
-    case 'C': return 'text-yellow-600';
-    case 'D': return 'text-orange-600';
-    case 'F': return 'text-red-600';
-    default: return 'text-gray-600';
+    case 'A': return 'text-green-600 dark:text-[#30D158]';
+    case 'B': return 'text-blue-600 dark:text-[#03FF40]';
+    case 'C': return 'text-yellow-600 dark:text-[#FFD60A]';
+    case 'D': return 'text-orange-600 dark:text-[#FF9F0A]';
+    case 'F': return 'text-red-600 dark:text-[#FF453A]';
+    default: return 'text-gray-600 dark:text-[#8E8E93]';
   }
 };
 
 // Helper function to get grade background color
 const getGradeBgColor = (grade: string): string => {
   switch (grade) {
-    case 'A': return 'bg-green-50 border-green-200';
-    case 'B': return 'bg-blue-50 border-blue-200';
-    case 'C': return 'bg-yellow-50 border-yellow-200';
-    case 'D': return 'bg-orange-50 border-orange-200';
-    case 'F': return 'bg-red-50 border-red-200';
-    default: return 'bg-gray-50 border-gray-200';
+    case 'A': return 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-[#30D158]/30';
+    case 'B': return 'bg-blue-50 border-blue-200 dark:bg-green-900/20 dark:border-[#03FF40]/30';
+    case 'C': return 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-[#FFD60A]/30';
+    case 'D': return 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-[#FF9F0A]/30';
+    case 'F': return 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-[#FF453A]/30';
+    default: return 'bg-gray-50 border-gray-200 dark:bg-[#3A3A3C] dark:border-white/10';
   }
 };
 
@@ -51,9 +51,9 @@ const scoreToGrade = (score: number): 'A' | 'B' | 'C' | 'D' | 'F' => {
 
 // Helper function to get metric color based on score
 const getMetricColor = (score: number): string => {
-  if (score >= 80) return 'text-green-600';
-  if (score >= 60) return 'text-yellow-600';
-  return 'text-red-600';
+  if (score >= 80) return 'text-green-600 dark:text-[#30D158]';
+  if (score >= 60) return 'text-yellow-600 dark:text-[#FFD60A]';
+  return 'text-red-600 dark:text-[#FF453A]';
 };
 
 // Progress bar component
@@ -67,7 +67,7 @@ const ProgressBar: React.FC<{
   
   return (
     <div className="relative">
-      <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+      <div className="w-full bg-gray-100 dark:bg-[#3A3A3C] rounded-full h-2 overflow-hidden">
         <div 
           className={`h-full rounded-full transition-all duration-700 ease-out ${color}`}
           style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
@@ -94,20 +94,20 @@ const MetricItem: React.FC<{
   icon: string;
 }> = ({ label, score, previousScore, showComparison, icon }) => {
   const colorClass = getMetricColor(score);
-  const bgColorClass = score >= 80 ? 'bg-green-100' : score >= 60 ? 'bg-yellow-100' : 'bg-red-100';
+  const bgColorClass = score >= 80 ? 'bg-green-100 dark:bg-[#30D158]' : score >= 60 ? 'bg-yellow-100 dark:bg-[#FFD60A]' : 'bg-red-100 dark:bg-[#FF453A]';
   
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <span className="text-lg">{icon}</span>
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-[#EBEBF5]">{label}</span>
         </div>
         <div className="flex items-center space-x-2">
           <span className={`text-lg font-semibold ${colorClass}`}>
             {score}
           </span>
-          <span className="text-xs text-gray-500">/ 100</span>
+          <span className="text-xs text-gray-500 dark:text-[#8E8E93]">/ 100</span>
         </div>
       </div>
       
@@ -140,7 +140,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
     : 0;
 
   return (
-    <div className={`bg-white border border-gray-200 rounded-xl p-6 space-y-6 ${className}`}>
+    <div className={`bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-white/5 rounded-xl p-6 space-y-6 ${className}`}>
       {/* Overall Grade Section */}
       <div className="text-center">
         <div className="flex items-center justify-center space-x-4">
@@ -152,12 +152,12 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
           
           {showComparison && previousMetrics && gradeImprovement !== 0 && (
             <div className="flex items-center space-x-1">
-              <span className="text-gray-400">→</span>
+              <span className="text-gray-400 dark:text-[#8E8E93]">→</span>
               <div className="flex items-center space-x-1">
                 <span className={gradeImprovement > 0 ? 'text-green-600' : 'text-red-600'}>
                   {gradeImprovement > 0 ? '↗' : '↘'}
                 </span>
-                <span className="text-sm font-medium text-gray-600">
+                <span className="text-sm font-medium text-gray-600 dark:text-[#EBEBF5]">
                   {Math.abs(gradeImprovement)} pts
                 </span>
               </div>
@@ -166,8 +166,8 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
         </div>
         
         <div className="mt-2">
-          <div className="text-lg font-semibold text-gray-900">Overall Score</div>
-          <div className="text-sm text-gray-500">{averageScore}/100</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-[#FFFFFF]">Overall Score</div>
+          <div className="text-sm text-gray-500 dark:text-[#8E8E93]">{averageScore}/100</div>
         </div>
       </div>
 
@@ -200,8 +200,8 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
 
       {/* Additional Stats */}
       {(metrics.wordCount || metrics.readingTime) && (
-        <div className="pt-4 border-t border-gray-100">
-          <div className="flex justify-center space-x-6 text-sm text-gray-500">
+        <div className="pt-4 border-t border-gray-100 dark:border-white/10">
+          <div className="flex justify-center space-x-6 text-sm text-gray-500 dark:text-[#8E8E93]">
             {metrics.wordCount && (
               <div className="flex items-center space-x-1">
                 <span>📝</span>
