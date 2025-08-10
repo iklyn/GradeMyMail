@@ -28,6 +28,8 @@ storybook-static
 GroqGemma/GemmaAPI/.env
 GroqGemma/GemmaAPI/.env
 
+.env.production
+
 
 .env
 .env.*
@@ -36,3 +38,4 @@ GroqGemma/GemmaAPI/.env
 .env
 env/
 .env.*
+.env.production
