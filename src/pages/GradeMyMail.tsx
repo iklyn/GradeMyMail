@@ -50,7 +50,7 @@ const GradeMyMail: React.FC = () => {
   // Enhanced error handling
   const { handleAsyncError, enableFallbackMode } = useErrorHandler();
 
-  // Check AI model status periodically (skip in test environment)
+  // Check GroqGemma API health periodically (skip in test environment)
   useEffect(() => {
     // Skip API calls in test environment
     if (process.env.NODE_ENV === 'test' || typeof window === 'undefined') {
@@ -59,24 +59,22 @@ const GradeMyMail: React.FC = () => {
 
     const checkModelStatus = async () => {
       try {
-        console.log('🔍 Checking AI model status...');
-        const status = await apiService.getModelsStatus();
-        console.log('📊 Received model status:', status);
+        console.log('🔍 Checking GroqGemma API health...');
+        const healthCheck = await apiService.checkAPIHealth();
+        console.log('📊 Received API health status:', healthCheck);
 
-        const isHealthy = status.status === 'healthy';
-        const currentModel = status.hybrid?.currentPrimary || 'unknown';
-        const usingFallback = status.hybrid?.usingFallback || false;
+        const isHealthy = healthCheck.healthy;
 
-        console.log(`✅ Model status: ${isHealthy ? 'healthy' : 'degraded'}, current: ${currentModel}, fallback: ${usingFallback}`);
+        console.log(`✅ GroqGemma API status: ${isHealthy ? 'healthy' : 'degraded'}`);
 
         setAiModelStatus({
-          currentModel,
+          currentModel: 'groq-gemma-dual-system',
           isHealthy,
-          usingFallback,
+          usingFallback: false,
           lastChecked: new Date(),
         });
       } catch (error) {
-        console.warn('❌ Failed to check AI model status:', error);
+        console.warn('❌ Failed to check GroqGemma API health:', error);
         setAiModelStatus(prev => ({
           ...prev,
           isHealthy: false,
@@ -207,7 +205,7 @@ const GradeMyMail: React.FC = () => {
     return { isValid: true };
   }, []);
 
-  // Manual analysis function with hybrid AI routing
+  // Manual analysis function with dual-system approach (rule-based + Gemma AI)
   const handleAnalyzeClick = useCallback(async () => {
     // Smart content validation
     const validation = validateContentForAnalysis(content);
@@ -219,51 +217,45 @@ const GradeMyMail: React.FC = () => {
     setIsAnalyzing(true);
 
     try {
-      console.log('🔍 Starting newsletter analysis with hybrid AI system...');
+      console.log('🔍 Starting newsletter analysis with GroqGemma dual-system approach...');
       console.log(`📊 Content stats: ${content.length} chars, ${content.split(/\s+/).length} words`);
 
-      // Update AI model status before analysis
-      const modelStatus = await apiService.getModelsStatus();
-      setAiModelStatus({
-        currentModel: modelStatus.hybrid?.currentPrimary || 'unknown',
-        isHealthy: modelStatus.status === 'healthy',
-        usingFallback: modelStatus.hybrid?.usingFallback || false,
-        lastChecked: new Date(),
-      });
+      // Run both systems in parallel for optimal performance
+      const [highlightingResponse, scoringResponse] = await Promise.all([
+        // Rule-based highlighting system for immediate visual feedback
+        apiService.analyzeNewsletter(content, 'newsletter-highlighting'),
+        // Groq Gemma AI for comprehensive scoring and analysis
+        apiService.scoreNewsletter(content, 'newsletter-scoring')
+      ]);
 
-      // Use the newsletter-specific hybrid AI router with custom prompts
-      const response = await apiService.analyzeNewsletter(content, 'newsletter-analysis');
-
-      console.log('✅ Analysis completed successfully');
-      console.log(`🤖 Used model: ${modelStatus.hybrid?.currentPrimary || 'unknown'}`);
+      console.log('✅ Dual-system analysis completed successfully');
+      console.log('🎯 Rule-based highlighting:', highlightingResponse.metadata?.model || 'groq-gemma-rule-based');
+      console.log('🤖 AI scoring model:', scoringResponse.metadata?.model || 'groq-gemma-2-9b-it');
 
       // LOG THE EXACT AI OUTPUT FOR DEBUGGING
-      console.log('🔍 === RAW AI OUTPUT ===');
-      console.log('📄 Full Response Object:', response);
-      console.log('📝 Tagged Content (AI Output):', response.message.content);
-      console.log('📊 Response Metadata:', response.metadata || 'No metadata');
-      console.log('🔍 === END AI OUTPUT ===');
+      console.log('🔍 === DUAL SYSTEM OUTPUT ===');
+      console.log('📄 Highlighting Response:', highlightingResponse);
+      console.log('📊 Scoring Response:', scoringResponse);
+      console.log('🔍 === END DUAL SYSTEM OUTPUT ===');
 
-      setAnalysisResult(response);
+      // Set analysis result for highlighting (rule-based system)
+      setAnalysisResult(highlightingResponse);
 
-      // Calculate metrics from the tagged content
-      const calculatedMetrics = calculateNewsletterMetrics(
-        response.message.content,
-        content
-      );
-      setMetrics(calculatedMetrics);
+      // Set metrics from Gemma AI scoring system
+      setMetrics(scoringResponse.metrics);
 
       setHasContentChanged(false); // Reset the changed flag after analysis
 
       // Update model status after successful analysis
       setAiModelStatus(prev => ({
         ...prev,
+        currentModel: 'groq-gemma-dual-system',
         isHealthy: true,
         lastChecked: new Date(),
       }));
 
     } catch (error) {
-      console.error('❌ Analysis failed:', error);
+      console.error('❌ Dual-system analysis failed:', error);
 
       // Update model status to indicate failure
       setAiModelStatus(prev => ({
@@ -275,11 +267,11 @@ const GradeMyMail: React.FC = () => {
       handleAsyncError(
         error instanceof Error ? error : new Error('Analysis failed'),
         {
-          operation: 'manual-analysis',
+          operation: 'dual-system-analysis',
           contentLength: content.length,
           errorType: error instanceof Error ? error.name : 'Unknown',
-          currentModel: aiModelStatus.currentModel,
-          usingFallback: aiModelStatus.usingFallback
+          currentModel: 'groq-gemma-dual-system',
+          usingFallback: false
         },
         async () => {
           // Retry with exponential backoff
@@ -288,18 +280,29 @@ const GradeMyMail: React.FC = () => {
         },
         () => {
           enableFallbackMode(true);
-          console.log('🔄 All AI systems failed, using intelligent fallback analysis...');
+          console.log('🔄 GroqGemma systems failed, using intelligent fallback analysis...');
 
           // Provide intelligent fallback response when all AI systems fail
           const fallbackResponse = {
-            message: {
-              content: createIntelligentFallbackAnalysis(content)
+            analysisResult: {
+              annotated: createIntelligentFallbackAnalysis(content)
+            },
+            summary: {
+              totalIssues: 3,
+              categories: ['fluff', 'spam_words', 'hard_to_read']
+            },
+            ranges: [],
+            metadata: {
+              model: 'intelligent-fallback',
+              timestamp: new Date().toISOString()
             }
           };
 
           setAnalysisResult(fallbackResponse);
+          
+          // Create fallback metrics
           const fallbackMetrics = calculateNewsletterMetrics(
-            fallbackResponse.message.content,
+            fallbackResponse.analysisResult.annotated,
             content
           );
           setMetrics(fallbackMetrics);
@@ -345,7 +348,12 @@ John`;
   }, []);
 
   const handleFixMyMailClick = useCallback(async () => {
-    if (!analysisResult?.message?.content) {
+    // Extract tagged content from the dual-system response
+    const taggedContent = analysisResult?.analysisResult?.annotated || 
+                         analysisResult?.message?.content || 
+                         '';
+    
+    if (!taggedContent) {
       return;
     }
 
@@ -358,7 +366,7 @@ John`;
       const emailData: Omit<EmailData, 'id' | 'timestamp'> = {
         originalText: content,
         originalHTML: htmlContent,
-        taggedContent: analysisResult.message.content || '',
+        taggedContent,
         metadata: {
           wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
           emailType: 'general',
@@ -438,7 +446,7 @@ John`;
             />
 
             {/* Analysis Results - Show highlighted content when analysis is complete */}
-            {analysisResult?.message?.content && !hasContentChanged && (
+            {analysisResult && !hasContentChanged && (
               <div className="absolute inset-0 bg-white/95 dark:bg-[#3A3A3C]/95 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-white/5 p-4 overflow-auto">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-[#EBEBF5]">Analysis Results</h3>
@@ -453,7 +461,7 @@ John`;
                   </button>
                 </div>
                 <HighlightedContent
-                  content={analysisResult.message.content}
+                  content={analysisResult.analysisResult?.annotated || analysisResult.message?.content || content}
                   originalHTML={htmlContent}
                   className="text-sm"
                 />
@@ -481,7 +489,7 @@ John`;
           )}
 
           {/* Improve Button - Only after analysis and content hasn't changed */}
-          {analysisResult?.message?.content && !hasContentChanged && !navigationState.isLoading && (
+          {analysisResult && !hasContentChanged && !navigationState.isLoading && (
             <button
               onClick={handleFixMyMailClick}
               disabled={isAnalyzing || navigationState.isLoading}

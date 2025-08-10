@@ -13,17 +13,9 @@ app.use(cors({
 // Parse JSON bodies
 app.use(express.json());
 
-// Mock analysis function
-// Load professional rule-based AI
-let ruleBasedAnalysis;
-try {
-  const aiModule = require('./ai-engines/rule-based-ai-cjs.cjs');
-  ruleBasedAnalysis = aiModule.ruleBasedAnalysis;
-  console.log('✅ Rule-based AI module loaded successfully');
-} catch (error) {
-  console.error('❌ Failed to load rule-based AI:', error);
-  process.exit(1);
-}
+// Mock analysis function for development
+// Note: In development, we use a simple mock instead of the full GroqGemma system
+console.log('🔧 Using development mock AI (GroqGemma system available in full server)');
 
 const mockAnalyzeEmail = async (content) => {
   try {
@@ -31,10 +23,20 @@ const mockAnalyzeEmail = async (content) => {
       return content || '';
     }
     
-    // Use professional rule-based AI analysis
-    return await ruleBasedAnalysis(content);
+    // Simple mock analysis for development
+    // In production, this would use the full GroqGemma dual-system
+    let result = content;
+    
+    // Add some basic highlighting for common spam words
+    const spamWords = ['amazing', 'incredible', 'urgent', 'act now', 'limited time', 'free', 'guarantee'];
+    spamWords.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      result = result.replace(regex, `<span class="highlight-spam">${word}</span>`);
+    });
+    
+    return result;
   } catch (error) {
-    console.error('Professional analysis error:', error);
+    console.error('Mock analysis error:', error);
     return content;
   }
 };
@@ -121,88 +123,177 @@ app.get('/api/health/models', (req, res) => {
   res.json(healthResponse);
 });
 
-// Analyze endpoint
+// New GroqGemma dual-system endpoints for development
+
+// Rule-based highlighting endpoint (matches /api/analyze from main server)
 app.post('/api/analyze', (req, res) => {
   try {
-    const { message } = req.body;
+    const { content } = req.body;
     
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    if (!content) {
+      return res.status(400).json({ error: 'Content is required' });
     }
     
-    console.log(`📧 Analyzing email content (${message.length} characters)`);
-    console.log(`📧 Content preview: ${message.substring(0, 100)}...`);
+    console.log(`🎯 Mock rule-based highlighting (${content.length} characters)`);
     
-    // Extract plain text from HTML if needed
-    let plainText = message;
-    if (message.includes('<') && message.includes('>')) {
-      // Simple HTML tag removal
-      plainText = message.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-    }
-    
-    console.log(`📧 Plain text: ${plainText.substring(0, 100)}...`);
-    
-    // Use professional analysis with minimal delay
     setTimeout(async () => {
-      const taggedContent = await mockAnalyzeEmail(plainText);
+      // Mock rule-based analysis result matching GroqGemma format
+      let annotatedContent = content;
       
-      console.log(`✅ Analysis complete`);
-      console.log('🔍 === SERVER AI OUTPUT ===');
-      console.log(`📝 Full Tagged Content: ${taggedContent}`);
-      console.log('🔍 === END SERVER OUTPUT ===');
+      // SENTENCE-LEVEL HIGHLIGHTING (like the real GroqGemma system)
+      // Split content into sentences and analyze each one
+      const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
       
-      res.json({
-        message: {
-          content: taggedContent
+      sentences.forEach(sentence => {
+        const trimmedSentence = sentence.trim();
+        if (!trimmedSentence) return;
+        
+        // Check for spam indicators in the sentence
+        const spamIndicators = ['unlock', 'launch', 'scale', 'automate', 'revolutionar', 'game-chang', 'breakthrough'];
+        const hasSpamWords = spamIndicators.some(word => 
+          trimmedSentence.toLowerCase().includes(word.toLowerCase())
+        );
+        
+        // Check for fluff indicators
+        const fluffIndicators = ['literally', 'absolutely', 'definitely', 'completely', 'really', 'very', 'quite', 'just'];
+        const hasFluff = fluffIndicators.some(word => 
+          new RegExp(`\\b${word}\\b`, 'i').test(trimmedSentence)
+        );
+        
+        // Check for hard-to-read indicators (long sentences, complex words)
+        const isHardToRead = trimmedSentence.split(' ').length > 25 || 
+          /microservices|implementation|optimization|configuration/.test(trimmedSentence);
+        
+        // Apply sentence-level highlighting (prioritize by severity)
+        if (hasSpamWords) {
+          annotatedContent = annotatedContent.replace(
+            trimmedSentence, 
+            `<spam_words>${trimmedSentence}</spam_words>`
+          );
+        } else if (isHardToRead) {
+          annotatedContent = annotatedContent.replace(
+            trimmedSentence, 
+            `<hard_to_read>${trimmedSentence}</hard_to_read>`
+          );
+        } else if (hasFluff) {
+          annotatedContent = annotatedContent.replace(
+            trimmedSentence, 
+            `<fluff>${trimmedSentence}</fluff>`
+          );
         }
       });
-    }, 500); // Reduced delay for better UX
+      
+      const mockAnalysisResult = {
+        annotated: annotatedContent,
+        report: {
+          perSentence: [
+            {
+              sentence: "This is amazing content!",
+              tags: ["spam_words"]
+            },
+            {
+              sentence: "It's literally the best thing ever.",
+              tags: ["fluff", "spam_words"]
+            }
+          ],
+          global: {
+            documentIssues: [],
+            totalSentences: 2,
+            flaggedSentences: 2
+          }
+        }
+      };
+      
+      const mockSummary = {
+        totalIssues: 3,
+        highPriority: 1,
+        mediumPriority: 2,
+        lowPriority: 0
+      };
+      
+      const mockRanges = [
+        {
+          start: content.indexOf('amazing'),
+          end: content.indexOf('amazing') + 7,
+          type: 'spam_words',
+          priority: 'high',
+          message: 'Consider using more specific language instead of "amazing"',
+          suggestion: 'Try "effective", "valuable", or "useful" instead'
+        }
+      ];
+      
+      const response = {
+        analysisResult: mockAnalysisResult,
+        summary: mockSummary,
+        ranges: mockRanges,
+        metadata: {
+          model: 'groq-gemma-rule-based-mock',
+          timestamp: new Date().toISOString(),
+          processingTime: 500
+        }
+      };
+      
+      console.log('🔍 === MOCK HIGHLIGHTING RESPONSE ===');
+      console.log('📄 Full Response:', JSON.stringify(response, null, 2));
+      console.log('🎨 Annotated Content:', mockAnalysisResult.annotated.substring(0, 200) + '...');
+      console.log('🔍 === END MOCK RESPONSE ===');
+      
+      res.json(response);
+    }, 500);
     
   } catch (error) {
-    console.error('Analysis error:', error);
+    console.error('Mock highlighting error:', error);
     res.status(500).json({ error: 'Analysis failed', details: error.message });
   }
 });
 
-// Newsletter-specific analyze endpoint (for hybrid AI integration)
-app.post('/api/newsletter/analyze', (req, res) => {
+// Gemma AI scoring endpoint (matches /api/newsletter/score from main server)
+app.post('/api/newsletter/score', (req, res) => {
   try {
-    const { message } = req.body;
+    const { content } = req.body;
     
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    if (!content) {
+      return res.status(400).json({ error: 'Content is required' });
     }
     
-    console.log(`📧 Newsletter analysis with hybrid AI (${message.length} characters)`);
-    console.log(`📧 Content preview: ${message.substring(0, 100)}...`);
+    console.log(`🤖 Mock Gemma AI scoring (${content.length} characters)`);
     
-    // ARCHITECTURAL CHANGE: Analyze HTML directly instead of converting to plain text
-    console.log(`🎯 Analyzing HTML directly to preserve formatting`);
-    
-    // Use professional analysis with minimal delay - PASS HTML DIRECTLY
-    setTimeout(async () => {
-      const taggedContent = await mockAnalyzeEmail(message); // Pass HTML directly
-      
-      console.log(`✅ Newsletter analysis complete`);
-      console.log('🔍 === SERVER AI OUTPUT ===');
-      console.log('📝 Full Tagged Content:', taggedContent);
-      console.log('🔍 === END SERVER OUTPUT ===');
+    setTimeout(() => {
+      // Mock comprehensive scoring
+      const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
+      const readingTime = Math.ceil(wordCount / 200);
       
       res.json({
-        message: {
-          content: taggedContent
+        metrics: {
+          overallGrade: 'B',
+          audienceFit: 75,
+          tone: 80,
+          clarity: 70,
+          engagement: 65,
+          spamRisk: 25,
+          wordCount,
+          readingTime,
+          summary: [
+            'Content has good structure and clear messaging',
+            'Some areas could benefit from more specific examples'
+          ],
+          improvements: [
+            'Add more specific examples to support your points',
+            'Consider shortening some sentences for better readability',
+            'Include a clearer call-to-action'
+          ]
         },
         metadata: {
-          model: 'mock-ai',
-          usingFallback: false,
+          model: 'groq-gemma-2-9b-it-mock',
           timestamp: new Date().toISOString(),
+          processingTime: 1000
         }
       });
     }, 1000);
     
   } catch (error) {
-    console.error('Newsletter analysis error:', error);
-    res.status(500).json({ error: 'Newsletter analysis failed', details: error.message });
+    console.error('Mock scoring error:', error);
+    res.status(500).json({ error: 'Scoring failed', details: error.message });
   }
 });
 

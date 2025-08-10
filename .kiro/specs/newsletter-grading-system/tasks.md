@@ -124,12 +124,71 @@
   - Add seamless model switching without user disruption
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3_
 
-- [ ] 7. Build clean comparison view for newsletter improvements
+- [x] 7. Build clean comparison view for newsletter improvements
   - Enhance existing VirtualizedDiffViewer with minimal side-by-side layout
   - Implement clean typography and subtle change indicators
   - Add simple copy functionality for improved content
   - Maintain original formatting while showing improvements clearly
   - _Requirements: 3.2, 3.3, 3.4, 7.3, 7.4, 7.5_
+
+- [x] 7.1. Remove all existing AI infrastructure and implement new GroqGemma system
+  - Remove all existing AI-related files and dependencies from server directory
+  - Delete current hybrid AI router, model communication, and load balancing systems
+  - Clean up existing analysis engine and API service AI-related code
+  - Remove Ollama, OpenAI, and transformers-related infrastructure files
+  - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+- [x] 7.2. Integrate GroqGemma rule-based highlighting system with comprehensive tag support
+  - Move content-tagger.js from GroqGemma folder to server/ai-engines/
+  - Create TypeScript wrapper for rule-based content analysis
+  - Integrate rule-based highlighting with existing HighlightOverlay component
+  - Implement comprehensive highlighting system supporting all 10 sentence-level tags:
+    * spam_words (high priority - red highlighting)
+    * grammar_spelling (high priority - red highlighting) 
+    * hard_to_read (medium priority - yellow highlighting)
+    * fluff (medium priority - yellow highlighting)
+    * emoji_excess (low priority - blue highlighting)
+    * cta (informational - blue highlighting)
+    * hedging (medium priority - yellow highlighting)
+    * vague_date (medium priority - yellow highlighting)
+    * vague_number (medium priority - yellow highlighting)
+    * claim_without_evidence (high priority - red highlighting)
+  - Add document-level issue detection (formatting, redundancy, readability, link density)
+  - Create clean visual feedback system with color-coded priority levels
+  - Implement hover tooltips showing specific issue details and improvement suggestions
+  - _Requirements: 1.3, 1.4, 8.1, 8.2, 8.3_
+
+- [x] 7.3. Integrate GemmaAPI AI system for analysis and scoring
+  - Move Gemma API system from GroqGemma folder to server/ai-engines/
+  - Create TypeScript service wrapper for Groq API communication
+  - Implement newsletter-specific analysis using Gemma system prompt
+  - Add comprehensive scoring system (Audience Fit, Tone, Clarity, Engagement, Spam Risk)
+  - Create clean metrics display with A-F grading scale
+  - _Requirements: 2.1, 2.2, 5.1, 5.2, 5.3, 5.4, 5.5_
+
+- [ ] 7.4. Create unified analysis pipeline with dual-system approach
+  - Design Apple-like seamless integration between rule-based and AI systems
+  - Implement rule-based highlighting for immediate visual feedback
+  - Use Groq Gemma AI for comprehensive analysis summary and scoring
+  - Create clean separation of concerns: highlights vs. analysis vs. scoring
+  - Add intelligent caching and performance optimization
+  - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3, 2.4_
+
+- [ ] 7.5. Update frontend services to use new GroqGemma infrastructure
+  - Modify analysisEngine.ts to work with new dual-system approach
+  - Update api.ts to communicate with new GroqGemma endpoints
+  - Implement clean error handling and fallback mechanisms
+  - Add real-time highlighting updates with rule-based system
+  - Create seamless user experience with instant feedback and comprehensive analysis
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2_
+
+- [ ] 7.6. Polish and optimize the new AI system integration
+  - Ensure Apple-like smooth performance and responsiveness
+  - Add comprehensive error handling with graceful degradation
+  - Implement proper TypeScript types for all new systems
+  - Add monitoring and health checks for Groq API
+  - Create clean logging and debugging capabilities
+  - _Requirements: 2.4, 9.1, 9.2, 9.3, 9.4_
 
 - [ ] 8. Add sample content and onboarding experience
   - Create realistic sample newsletter content for demonstration
@@ -152,12 +211,6 @@
   - Ensure system works reliably with local models offline
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-- [ ] 11. Create new main application pages and routing
-  - Build new NewsletterGrader page replacing existing GradeMyMail
-  - Create NewsletterImprover page replacing existing FixMyMail
-  - Update routing and navigation to reflect newsletter focus
-  - Remove complex demo pages and focus on core functionality
-  - _Requirements: 1.1, 3.1, 4.1_
 
 - [ ] 12. Optimize performance and implement production-grade features
   - Add response caching for identical newsletter content

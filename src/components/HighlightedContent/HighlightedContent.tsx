@@ -84,7 +84,7 @@ export const HighlightedContent: React.FC<HighlightedContentProps> = ({
           })
           .join('; ');
         
-        return `<span class="highlight-span" style="${styleString}" title="${tooltip}">${taggedText}</span>`;
+        return `<div class="highlight-span" style="${styleString}" title="${tooltip}">${taggedText}</div>`;
       }
     );
     

@@ -2,11 +2,15 @@ import React from 'react';
 
 export interface NewsletterMetrics {
   overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+  audienceFit: number;  // 0-100
+  tone: number;         // 0-100
   clarity: number;      // 0-100
   engagement: number;   // 0-100
-  tone: number;         // 0-100
+  spamRisk: number;     // 0-100 (higher = more spammy)
   wordCount?: number;
   readingTime?: number;
+  summary?: string[];
+  improvements?: string[];
 }
 
 export interface MetricsDisplayProps {
@@ -49,10 +53,11 @@ const scoreToGrade = (score: number): 'A' | 'B' | 'C' | 'D' | 'F' => {
   return 'F';
 };
 
-// Helper function to get metric color based on score
-const getMetricColor = (score: number): string => {
-  if (score >= 80) return 'text-green-600 dark:text-[#30D158]';
-  if (score >= 60) return 'text-yellow-600 dark:text-[#FFD60A]';
+// Helper function to get metric color based on score (inverted for spam risk)
+const getMetricColor = (score: number, isSpamRisk = false): string => {
+  const effectiveScore = isSpamRisk ? 100 - score : score; // Invert spam risk (lower is better)
+  if (effectiveScore >= 80) return 'text-green-600 dark:text-[#30D158]';
+  if (effectiveScore >= 60) return 'text-yellow-600 dark:text-[#FFD60A]';
   return 'text-red-600 dark:text-[#FF453A]';
 };
 
@@ -92,9 +97,11 @@ const MetricItem: React.FC<{
   previousScore?: number;
   showComparison?: boolean;
   icon: string;
-}> = ({ label, score, previousScore, showComparison, icon }) => {
-  const colorClass = getMetricColor(score);
-  const bgColorClass = score >= 80 ? 'bg-green-100 dark:bg-[#30D158]' : score >= 60 ? 'bg-yellow-100 dark:bg-[#FFD60A]' : 'bg-red-100 dark:bg-[#FF453A]';
+  isSpamRisk?: boolean;
+}> = ({ label, score, previousScore, showComparison, icon, isSpamRisk = false }) => {
+  const colorClass = getMetricColor(score, isSpamRisk);
+  const effectiveScore = isSpamRisk ? 100 - score : score; // Invert spam risk for display
+  const bgColorClass = effectiveScore >= 80 ? 'bg-green-100 dark:bg-[#30D158]' : effectiveScore >= 60 ? 'bg-yellow-100 dark:bg-[#FFD60A]' : 'bg-red-100 dark:bg-[#FF453A]';
   
   return (
     <div className="space-y-3">
@@ -112,7 +119,7 @@ const MetricItem: React.FC<{
       </div>
       
       <ProgressBar 
-        score={score} 
+        score={score}
         previousScore={previousScore}
         showComparison={showComparison}
         color={bgColorClass}
@@ -127,12 +134,14 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
   showComparison = false,
   className = '',
 }) => {
-  const averageScore = Math.round((metrics.clarity + metrics.engagement + metrics.tone) / 3);
+  // Calculate weighted average (spam risk is inverted - lower is better)
+  const invertedSpamRisk = 100 - metrics.spamRisk;
+  const averageScore = Math.round((metrics.audienceFit + metrics.tone + metrics.clarity + metrics.engagement + invertedSpamRisk) / 5);
   const calculatedGrade = scoreToGrade(averageScore);
   const displayGrade = metrics.overallGrade || calculatedGrade;
   
   const previousAverageScore = previousMetrics 
-    ? Math.round((previousMetrics.clarity + previousMetrics.engagement + previousMetrics.tone) / 3)
+    ? Math.round((previousMetrics.audienceFit + previousMetrics.tone + previousMetrics.clarity + previousMetrics.engagement + (100 - previousMetrics.spamRisk)) / 5)
     : undefined;
   
   const gradeImprovement = previousMetrics && previousAverageScore 
@@ -174,6 +183,22 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
       {/* Individual Metrics */}
       <div className="space-y-4">
         <MetricItem
+          label="Audience Fit"
+          score={metrics.audienceFit}
+          previousScore={showComparison ? previousMetrics?.audienceFit : undefined}
+          showComparison={showComparison}
+          icon="👥"
+        />
+        
+        <MetricItem
+          label="Tone"
+          score={metrics.tone}
+          previousScore={showComparison ? previousMetrics?.tone : undefined}
+          showComparison={showComparison}
+          icon="🎭"
+        />
+        
+        <MetricItem
           label="Clarity"
           score={metrics.clarity}
           previousScore={showComparison ? previousMetrics?.clarity : undefined}
@@ -190,11 +215,12 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({
         />
         
         <MetricItem
-          label="Tone"
-          score={metrics.tone}
-          previousScore={showComparison ? previousMetrics?.tone : undefined}
+          label="Spam Risk"
+          score={metrics.spamRisk}
+          previousScore={showComparison ? previousMetrics?.spamRisk : undefined}
           showComparison={showComparison}
-          icon="🎭"
+          icon="🛡️"
+          isSpamRisk={true}
         />
       </div>
 

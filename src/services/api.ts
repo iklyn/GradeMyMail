@@ -519,8 +519,13 @@ export const apiService = {
   // Service status check
   getServiceStatus,
 
-  // Newsletter-specific analysis with hybrid AI routing
-  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<AnalyzeResponse> {
+  // New GroqGemma newsletter analysis with highlighting support
+  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<{
+    analysisResult: any;
+    summary: any;
+    ranges: any[];
+    metadata: any;
+  }> {
     const controller = requestManager.createController(requestKey);
     
     try {
@@ -529,22 +534,19 @@ export const apiService = {
         throw new APIError('Content cannot be empty', 'validation', 400);
       }
       
-      if (content.length > 50000) { // 50KB limit
+      if (content.length > 50000) {
         throw new APIError('Content too large. Please reduce the size and try again.', 'validation', 400);
       }
 
-      console.log('🚀 Using newsletter-specific hybrid AI endpoint');
-      
       const response = await withRetry(
-        () => apiClient.post<AnalyzeResponse>(
-          '/newsletter/analyze',
-          { message: content },
+        () => apiClient.post(
+          '/analyze',
+          { content },
           { signal: controller.signal }
         ),
         {
           ...defaultRetryConfig,
           retryCondition: (error: AxiosError) => {
-            // Don't retry validation errors
             if (error.response?.status === 400) return false;
             return defaultRetryConfig.retryCondition(error);
           }
@@ -553,16 +555,10 @@ export const apiService = {
       
       requestManager.cleanup(requestKey);
       
-      // Validate response
-      if (!response.data?.message?.content) {
-        throw new APIError('Invalid response from newsletter analysis service', 'ai', 502);
-      }
-      
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
       
-      // Enhanced error context
       if (error instanceof APIError) {
         error.context = {
           ...error.context,
@@ -576,36 +572,45 @@ export const apiService = {
     }
   },
 
-  // Newsletter-specific improvement with hybrid AI routing
-  async improveNewsletter(taggedContent: string, requestKey = 'newsletter-improve'): Promise<FixResponse> {
+  // Newsletter comprehensive scoring with Gemma API
+  async scoreNewsletter(content: string, requestKey = 'newsletter-score'): Promise<{
+    metrics: {
+      overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+      audienceFit: number;
+      tone: number;
+      clarity: number;
+      engagement: number;
+      spamRisk: number;
+      wordCount: number;
+      readingTime: number;
+      summary: string[];
+      improvements: string[];
+    };
+    metadata: any;
+  }> {
     const controller = requestManager.createController(requestKey);
     
     try {
       // Validate input
-      if (!taggedContent || taggedContent.trim().length === 0) {
-        throw new APIError('Tagged content cannot be empty', 'validation', 400);
+      if (!content || content.trim().length === 0) {
+        throw new APIError('Content cannot be empty', 'validation', 400);
       }
-
-      // Check if content has valid tags
-      const tagRegex = /<(fluff|spam_words|hard_to_read)>.*?<\/\1>/g;
-      if (!tagRegex.test(taggedContent)) {
-        throw new APIError('No valid tags found in content. Please analyze the content first.', 'validation', 400);
+      
+      if (content.length > 50000) {
+        throw new APIError('Content too large. Please reduce the size and try again.', 'validation', 400);
       }
-
-      console.log('🚀 Using newsletter-specific hybrid AI improvement endpoint');
 
       const response = await withRetry(
-        () => apiClient.post<FixResponse>(
-          '/newsletter/improve',
-          { message: taggedContent },
+        () => apiClient.post(
+          '/newsletter/score',
+          { content },
           { signal: controller.signal }
         ),
         {
           ...defaultRetryConfig,
-          retries: 2, // Fewer retries for fix operations
+          retries: 2, // Allow more retries for AI scoring
           retryCondition: (error: AxiosError) => {
-            // Don't retry validation errors or client errors
-            if (error.response?.status && error.response.status < 500) return false;
+            if (error.response?.status === 400) return false;
             return defaultRetryConfig.retryCondition(error);
           }
         }
@@ -614,21 +619,20 @@ export const apiService = {
       requestManager.cleanup(requestKey);
       
       // Validate response
-      if (!response.data?.message?.content) {
-        throw new APIError('Invalid response from newsletter improvement service', 'ai', 502);
+      if (!response.data?.metrics) {
+        throw new APIError('Invalid response from scoring service', 'ai', 502);
       }
       
       return response.data;
     } catch (error) {
       requestManager.cleanup(requestKey);
       
-      // Enhanced error context
       if (error instanceof APIError) {
         error.context = {
           ...error.context,
-          taggedContentLength: taggedContent.length,
+          contentLength: content.length,
           requestKey,
-          operation: 'improveNewsletter'
+          operation: 'scoreNewsletter'
         };
       }
       
@@ -636,14 +640,9 @@ export const apiService = {
     }
   },
 
-  // Get AI models status
-  async getModelsStatus(): Promise<any> {
-    try {
-      const response = await apiClient.get('/health/models', { timeout: 5000 });
-      return response.data;
-    } catch (error) {
-      console.warn('Failed to get models status:', error);
-      return { status: 'unknown', models: {}, hybrid: {} };
-    }
+  // Legacy newsletter improvement (will be enhanced later)
+  async improveNewsletter(taggedContent: string, requestKey = 'newsletter-improve'): Promise<FixResponse> {
+    // This will be implemented with the new GroqGemma system
+    return this.fixEmail(taggedContent, requestKey);
   },
 };
