@@ -33,3 +33,6 @@ GroqGemma/GemmaAPI/.env
 .env.*
 *.env
 *.env.*
+.env
+env/
+.env.*
