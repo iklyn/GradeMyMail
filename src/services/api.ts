@@ -519,61 +519,11 @@ export const apiService = {
   // Service status check
   getServiceStatus,
 
-  // New GroqGemma newsletter analysis with highlighting support
+  // Unified newsletter analysis with dual-system approach (highlighting + scoring)
   async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<{
     analysisResult: any;
     summary: any;
     ranges: any[];
-    metadata: any;
-  }> {
-    const controller = requestManager.createController(requestKey);
-    
-    try {
-      // Validate input
-      if (!content || content.trim().length === 0) {
-        throw new APIError('Content cannot be empty', 'validation', 400);
-      }
-      
-      if (content.length > 50000) {
-        throw new APIError('Content too large. Please reduce the size and try again.', 'validation', 400);
-      }
-
-      const response = await withRetry(
-        () => apiClient.post(
-          '/analyze',
-          { content },
-          { signal: controller.signal }
-        ),
-        {
-          ...defaultRetryConfig,
-          retryCondition: (error: AxiosError) => {
-            if (error.response?.status === 400) return false;
-            return defaultRetryConfig.retryCondition(error);
-          }
-        }
-      );
-      
-      requestManager.cleanup(requestKey);
-      
-      return response.data;
-    } catch (error) {
-      requestManager.cleanup(requestKey);
-      
-      if (error instanceof APIError) {
-        error.context = {
-          ...error.context,
-          contentLength: content.length,
-          requestKey,
-          operation: 'analyzeNewsletter'
-        };
-      }
-      
-      throw error;
-    }
-  },
-
-  // Newsletter comprehensive scoring with Gemma API
-  async scoreNewsletter(content: string, requestKey = 'newsletter-score'): Promise<{
     metrics: {
       overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
       audienceFit: number;
@@ -602,13 +552,13 @@ export const apiService = {
 
       const response = await withRetry(
         () => apiClient.post(
-          '/newsletter/score',
+          '/analyze',
           { content },
           { signal: controller.signal }
         ),
         {
           ...defaultRetryConfig,
-          retries: 2, // Allow more retries for AI scoring
+          retries: 2, // Allow retries for dual-system analysis
           retryCondition: (error: AxiosError) => {
             if (error.response?.status === 400) return false;
             return defaultRetryConfig.retryCondition(error);
@@ -618,9 +568,9 @@ export const apiService = {
       
       requestManager.cleanup(requestKey);
       
-      // Validate response
-      if (!response.data?.metrics) {
-        throw new APIError('Invalid response from scoring service', 'ai', 502);
+      // Validate unified response
+      if (!response.data?.analysisResult || !response.data?.metrics) {
+        throw new APIError('Invalid response from unified analysis service', 'ai', 502);
       }
       
       return response.data;
@@ -632,12 +582,36 @@ export const apiService = {
           ...error.context,
           contentLength: content.length,
           requestKey,
-          operation: 'scoreNewsletter'
+          operation: 'analyzeNewsletter'
         };
       }
       
       throw error;
     }
+  },
+
+  // Legacy newsletter scoring endpoint (kept for backward compatibility)
+  async scoreNewsletter(content: string, requestKey = 'newsletter-score'): Promise<{
+    metrics: {
+      overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+      audienceFit: number;
+      tone: number;
+      clarity: number;
+      engagement: number;
+      spamRisk: number;
+      wordCount: number;
+      readingTime: number;
+      summary: string[];
+      improvements: string[];
+    };
+    metadata: any;
+  }> {
+    // Use the unified endpoint for better performance
+    const unifiedResponse = await this.analyzeNewsletter(content, requestKey);
+    return {
+      metrics: unifiedResponse.metrics,
+      metadata: unifiedResponse.metadata
+    };
   },
 
   // Legacy newsletter improvement (will be enhanced later)

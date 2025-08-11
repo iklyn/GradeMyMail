@@ -5,17 +5,16 @@ import compression from 'compression';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { createDatabaseManager } from './database-abstraction.js';
-import { 
-  errorHandler, 
-  requestIdMiddleware, 
-  ValidationError, 
-  StorageError,
-  NotFoundError 
+import {
+  errorHandler,
+  requestIdMiddleware,
+  ValidationError,
+  NotFoundError
 } from './error-handler.js';
-import { 
-  metricsMiddleware, 
-  healthCheckHandler, 
-  metricsHandler 
+import {
+  metricsMiddleware,
+  healthCheckHandler,
+  metricsHandler
 } from './monitoring.js';
 import { withRetry, RETRY_CONFIGS } from './retry-logic.js';
 
@@ -37,16 +36,7 @@ interface StoreRequest {
   };
 }
 
-interface StoredData {
-  id: string;
-  payload: {
-    fullOriginalText: string;
-    fullOriginalHTML: string;
-    taggedContent: string;
-  };
-  created: number;
-  expires: number;
-}
+// Removed unused StoredData interface
 
 // Database manager for scalable storage
 const databaseManager = createDatabaseManager({
@@ -55,8 +45,7 @@ const databaseManager = createDatabaseManager({
   ttl: 30 * 60 * 1000, // 30 minutes
 });
 
-// Cleanup expired data every 5 minutes
-const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+// Data TTL configuration
 const DATA_TTL = 30 * 60 * 1000; // 30 minutes
 
 // Create Express app
@@ -103,7 +92,7 @@ app.use(helmet({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? ['https://yourdomain.com'] // Replace with actual production domain
     : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true,
@@ -117,7 +106,7 @@ app.use(cors(corsOptions));
 
 // Compression middleware for response optimization
 app.use(compression({
-  filter: (req, res) => {
+  filter: (req: Request, res: Response) => {
     if (req.headers['cache-control'] && req.headers['cache-control'].includes('no-transform')) {
       return false;
     }
@@ -132,7 +121,7 @@ app.use(compression({
 const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
 
 app.use(morgan(morganFormat, {
-  skip: (req) => req.url === '/api/health',
+  skip: (req: Request) => req.url === '/api/health',
   stream: process.stdout,
 }));
 
@@ -143,7 +132,7 @@ const createRateLimit = (windowMs: number, max: number, message: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const ip = req.ip || req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const now = Date.now();
-    
+
     if (Math.random() < 0.01) {
       for (const [key, data] of rateLimitStore.entries()) {
         if (now > data.resetTime) {
@@ -151,24 +140,24 @@ const createRateLimit = (windowMs: number, max: number, message: string) => {
         }
       }
     }
-    
+
     const current = rateLimitStore.get(ip as string) || { count: 0, resetTime: now + windowMs };
-    
+
     if (now > current.resetTime) {
       current.count = 1;
       current.resetTime = now + windowMs;
     } else {
       current.count++;
     }
-    
+
     rateLimitStore.set(ip as string, current);
-    
+
     res.set({
       'X-RateLimit-Limit': max.toString(),
       'X-RateLimit-Remaining': Math.max(0, max - current.count).toString(),
       'X-RateLimit-Reset': new Date(current.resetTime).toISOString(),
     });
-    
+
     if (current.count > max) {
       return res.status(429).json({
         error: 'Too many requests',
@@ -176,7 +165,7 @@ const createRateLimit = (windowMs: number, max: number, message: string) => {
         retryAfter: Math.ceil((current.resetTime - now) / 1000),
       });
     }
-    
+
     next();
   };
 };
@@ -197,13 +186,13 @@ const aiRateLimit = createRateLimit(
 app.use('/api', generalRateLimit);
 
 // Body parsing middleware
-app.use(express.json({ 
+app.use(express.json({
   limit: '10mb',
   strict: true,
   type: 'application/json',
 }));
-app.use(express.urlencoded({ 
-  extended: true, 
+app.use(express.urlencoded({
+  extended: true,
   limit: '10mb',
   parameterLimit: 1000,
 }));
@@ -261,7 +250,7 @@ const sanitizeInput = (req: Request, res: Response, next: NextFunction) => {
         }
         return obj;
       };
-      
+
       req.body = sanitize(req.body);
     }
     next();
@@ -276,6 +265,15 @@ app.use(sanitizeInput);
 app.get('/api/health', healthCheckHandler);
 app.get('/api/metrics', generalRateLimit, metricsHandler);
 
+// Cache status endpoint for monitoring
+app.get('/api/cache/stats', generalRateLimit, (req: Request, res: Response) => {
+  const stats = analysisCache.getStats();
+  res.json({
+    cache: stats,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Simple health checks
 app.get('/api/health/simple', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -285,20 +283,20 @@ app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {
     // Check Gemma API service health
     const gemmaHealth = await gemmaAPIService.getHealthStatus();
-    
+
     const allHealthy = gemmaHealth.status === 'healthy';
-    
-    res.status(allHealthy ? 200 : 503).json({ 
-      status: allHealthy ? 'ready' : 'not ready', 
+
+    res.status(allHealthy ? 200 : 503).json({
+      status: allHealthy ? 'ready' : 'not ready',
       timestamp: new Date().toISOString(),
-      services: { 
+      services: {
         gemmaAPI: gemmaHealth,
         contentTagger: { status: 'healthy', model: 'rule-based' }
       }
     });
   } catch (error) {
-    res.status(503).json({ 
-      status: 'not ready', 
+    res.status(503).json({
+      status: 'not ready',
       timestamp: new Date().toISOString(),
       error: 'Service check failed',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -307,8 +305,8 @@ app.get('/api/health/ready', async (req: Request, res: Response) => {
 });
 
 app.get('/api/health/live', (_req: Request, res: Response) => {
-  res.status(200).json({ 
-    status: 'alive', 
+  res.status(200).json({
+    status: 'alive',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -317,18 +315,18 @@ app.get('/api/health/live', (_req: Request, res: Response) => {
 // Temporary mock functions (will be replaced with GroqGemma system)
 const mockAnalyzeEmail = async (content: string): Promise<string> => {
   await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-  
+
   let taggedContent = content;
   taggedContent = taggedContent.replace(/\b(amazing|incredible|fantastic)\b/gi, '<fluff>$1</fluff>');
   taggedContent = taggedContent.replace(/\b(free|urgent|act now|limited time)\b/gi, '<spam_words>$1</spam_words>');
   taggedContent = taggedContent.replace(/\b[A-Z][^.!?]*[.!?]\s*[A-Z][^.!?]*[.!?]\s*[A-Z][^.!?]*[.!?]/g, '<hard_to_read>$&</hard_to_read>');
-  
+
   return taggedContent;
 };
 
 const mockFixEmail = async (taggedContent: string): Promise<string> => {
   await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
-  
+
   const improvements = [
     { original: 'amazing', improved: 'excellent' },
     { original: 'incredible', improved: 'remarkable' },
@@ -351,35 +349,229 @@ const mockFixEmail = async (taggedContent: string): Promise<string> => {
 import { contentTagger, type ContentAnalysisResult } from './ai-engines/content-tagger.js';
 import { gemmaAPIService, type NewsletterAnalysis } from './ai-engines/gemma-api.js';
 
+// Intelligent caching for analysis results
+interface CacheEntry {
+  result: any;
+  timestamp: Date;
+  contentHash: string;
+  expiresAt: Date;
+}
+
+class AnalysisCache {
+  private cache = new Map<string, CacheEntry>();
+  private readonly maxCacheSize = 1000;
+  private readonly cacheExpiryMs = 30 * 60 * 1000; // 30 minutes
+
+  // Create content hash for deduplication
+  private createContentHash(content: string): string {
+    let hash = 0;
+    if (content.length === 0) return hash.toString();
+
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return Math.abs(hash).toString(36);
+  }
+
+  // Get cached result if valid
+  get(content: string): any | null {
+    const contentHash = this.createContentHash(content);
+    const entry = this.cache.get(contentHash);
+
+    if (!entry) return null;
+
+    const now = new Date();
+    if (now > entry.expiresAt) {
+      this.cache.delete(contentHash);
+      return null;
+    }
+
+    console.log(`💾 Cache hit for content hash: ${contentHash}`);
+    return entry.result;
+  }
+
+  // Set cached result
+  set(content: string, result: any): void {
+    const contentHash = this.createContentHash(content);
+    const now = new Date();
+
+    // Implement LRU eviction if cache is full
+    if (this.cache.size >= this.maxCacheSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) {
+        this.cache.delete(firstKey);
+      }
+    }
+
+    this.cache.set(contentHash, {
+      result,
+      timestamp: now,
+      contentHash,
+      expiresAt: new Date(now.getTime() + this.cacheExpiryMs),
+    });
+
+    console.log(`💾 Cached result for content hash: ${contentHash}`);
+  }
+
+  // Clear expired entries
+  cleanup(): void {
+    const now = new Date();
+    let cleanedCount = 0;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiresAt) {
+        this.cache.delete(key);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned up ${cleanedCount} expired cache entries`);
+    }
+  }
+
+  // Get cache stats
+  getStats() {
+    return {
+      size: this.cache.size,
+      maxSize: this.maxCacheSize,
+      expiryMs: this.cacheExpiryMs,
+    };
+  }
+}
+
+// Create cache instance
+const analysisCache = new AnalysisCache();
+
+// Cleanup expired cache entries every 10 minutes
+setInterval(() => {
+  analysisCache.cleanup();
+}, 10 * 60 * 1000);
+
 // API Routes - Using GroqGemma rule-based system
 
-// Newsletter analysis endpoint with rule-based highlighting
+// Unified newsletter analysis endpoint with dual-system approach
 app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { content } = req.body;
-    
-    console.log(`📧 Analyzing newsletter content (${content.length} characters) - using GroqGemma rule-based system`);
-    
-    const analysisResult = await withRetry(
-      async () => contentTagger.analyzeNewsletter(content),
-      { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
-    );
-    
-    const summary = contentTagger.getAnalysisSummary(analysisResult);
-    const ranges = contentTagger.extractHighlightRanges(content, analysisResult);
-    
-    res.json({
+    const startTime = (req as any).startTime || Date.now();
+
+    console.log(`🔍 Starting unified dual-system analysis (${content.length} characters)...`);
+
+    // Check cache first for performance optimization
+    const cachedResult = analysisCache.get(content);
+    if (cachedResult) {
+      console.log('💾 Returning cached analysis result');
+      // Update processing time for cached result
+      cachedResult.metadata.processingTime = Date.now() - startTime;
+      cachedResult.metadata.cached = true;
+      return res.json(cachedResult);
+    }
+
+    // Run both systems in parallel for optimal performance
+    const [highlightingResult, scoringResult] = await Promise.allSettled([
+      // Rule-based highlighting system for immediate visual feedback
+      withRetry(
+        async () => contentTagger.analyzeNewsletter(content),
+        { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
+      ),
+      // Groq Gemma AI for comprehensive scoring and analysis
+      withRetry(
+        async () => gemmaAPIService.analyzeNewsletter(content),
+        { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 2 }
+      )
+    ]);
+
+    // Process rule-based highlighting results
+    let analysisResult, summary, ranges;
+    if (highlightingResult.status === 'fulfilled') {
+      analysisResult = highlightingResult.value;
+      summary = contentTagger.getAnalysisSummary(analysisResult);
+      ranges = contentTagger.extractHighlightRanges(content, analysisResult);
+      console.log('✅ Rule-based highlighting completed successfully');
+    } else {
+      console.warn('⚠️ Rule-based highlighting failed:', highlightingResult.reason);
+      // Provide fallback highlighting
+      analysisResult = { annotated: content, report: { perSentence: [], global: { wordCount: content.split(/\s+/).length } } };
+      summary = { score: 75, grade: 'C', issueCounts: { high: 0, medium: 0, low: 0, info: 0 } };
+      ranges = [];
+    }
+
+    // Process Gemma AI scoring results
+    let metrics;
+    if (scoringResult.status === 'fulfilled') {
+      const analysis = scoringResult.value;
+      const wordCount = content.split(/\s+/).filter((word: string) => word.length > 0).length;
+      const readingTime = Math.ceil(wordCount / 200);
+
+      metrics = {
+        overallGrade: analysis.overallGrade,
+        audienceFit: analysis.audienceFit,
+        tone: analysis.tone,
+        clarity: analysis.clarity,
+        engagement: analysis.engagement,
+        spamRisk: analysis.spamRisk,
+        wordCount,
+        readingTime,
+        summary: analysis.summary,
+        improvements: analysis.improvements
+      };
+      console.log('✅ Gemma AI scoring completed successfully');
+    } else {
+      console.warn('⚠️ Gemma AI scoring failed:', scoringResult.reason);
+      // Provide fallback metrics
+      const wordCount = content.split(/\s+/).filter((word: string) => word.length > 0).length;
+      metrics = {
+        overallGrade: 'C' as const,
+        audienceFit: 70,
+        tone: 70,
+        clarity: 70,
+        engagement: 70,
+        spamRisk: 30,
+        wordCount,
+        readingTime: Math.ceil(wordCount / 200),
+        summary: ['Analysis completed with limited AI functionality'],
+        improvements: ['AI scoring temporarily unavailable - using rule-based analysis']
+      };
+    }
+
+    // Create unified response
+    const unifiedResponse = {
+      // Rule-based highlighting data
       analysisResult,
       summary,
       ranges,
+      // Gemma AI scoring data
+      metrics,
+      // Unified metadata
       metadata: {
-        model: 'groq-gemma-rule-based',
+        model: 'groq-gemma-dual-system',
+        systems: {
+          highlighting: highlightingResult.status === 'fulfilled' ? 'groq-gemma-rule-based' : 'fallback',
+          scoring: scoringResult.status === 'fulfilled' ? 'groq-gemma-2-9b-it' : 'fallback'
+        },
         timestamp: new Date().toISOString(),
-        processingTime: Date.now() - ((req as any).startTime || Date.now())
+        processingTime: Date.now() - startTime,
+        cached: false,
+        systemHealth: {
+          ruleBased: highlightingResult.status === 'fulfilled',
+          gemmaAI: scoringResult.status === 'fulfilled'
+        }
       }
-    });
+    };
+
+    // Cache the result for future requests
+    analysisCache.set(content, unifiedResponse);
+
+    // Return unified response
+    res.json(unifiedResponse);
+
+    console.log(`🎉 Unified dual-system analysis completed in ${Date.now() - startTime}ms`);
   } catch (error) {
-    console.error('Analysis failed:', error);
+    console.error('❌ Unified analysis failed:', error);
     next(error);
   }
 });
@@ -388,14 +580,14 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: 
 app.post('/api/newsletter/analyze', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
-    
+
     console.log(`📧 Analyzing newsletter content (${message.length} characters) - using GroqGemma rule-based system`);
-    
+
     const analysisResult = await withRetry(
       async () => contentTagger.analyzeNewsletter(message),
       { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
     );
-    
+
     res.json({
       message: {
         content: analysisResult.annotated
@@ -416,18 +608,18 @@ app.post('/api/newsletter/analyze', aiRateLimit, validateRequest(['message']), a
 app.post('/api/newsletter/score', aiRateLimit, validateRequest(['content']), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { content } = req.body;
-    
+
     console.log(`🎯 Scoring newsletter content (${content.length} characters) - using Groq Gemma API`);
-    
+
     const analysis = await withRetry(
       async () => gemmaAPIService.analyzeNewsletter(content),
       { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 2 }
     );
-    
+
     // Calculate additional metrics
     const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
     const readingTime = Math.ceil(wordCount / 200); // Average reading speed
-    
+
     res.json({
       metrics: {
         overallGrade: analysis.overallGrade,
@@ -457,14 +649,14 @@ app.post('/api/newsletter/score', aiRateLimit, validateRequest(['content']), asy
 app.post('/api/newsletter/improve', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
-    
+
     console.log(`🔧 Improving newsletter content (${message.length} characters) - using temporary mock`);
-    
+
     const improvements = await withRetry(
       () => mockFixEmail(message),
       { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
     );
-    
+
     res.json({
       message: {
         content: improvements
@@ -484,14 +676,14 @@ app.post('/api/newsletter/improve', aiRateLimit, validateRequest(['message']), a
 app.post('/api/analyze-legacy', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, AnalyzeRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
-    
+
     console.log(`📧 Analyzing email content (${message.length} characters) - using GroqGemma rule-based system`);
-    
+
     const analysisResult = await withRetry(
       async () => contentTagger.analyzeNewsletter(message),
       { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
     );
-    
+
     res.json({
       message: {
         content: analysisResult.annotated
@@ -505,14 +697,14 @@ app.post('/api/analyze-legacy', aiRateLimit, validateRequest(['message']), async
 app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
   try {
     const { message } = req.body;
-    
+
     console.log(`🔧 Fixing tagged content (${message.length} characters) - using temporary mock`);
-    
+
     const improvements = await withRetry(
       () => mockFixEmail(message),
       { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
     );
-    
+
     res.json({
       message: {
         content: improvements
@@ -528,14 +720,14 @@ app.post('/api/store', validateRequest(['payload']), async (req: Request<{}, {},
   try {
     const { payload } = req.body;
     const id = uuidv4();
-    
+
     await withRetry(
       async () => {
         await databaseManager.set(id, payload, DATA_TTL);
       },
       RETRY_CONFIGS.STORAGE
     );
-    
+
     console.log(`💾 Stored data with ID: ${id} (expires in ${DATA_TTL / 1000 / 60} minutes)`);
     res.json({ id });
   } catch (error) {
@@ -546,17 +738,17 @@ app.post('/api/store', validateRequest(['payload']), async (req: Request<{}, {},
 app.get('/api/load', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.query;
-    
+
     if (!id || typeof id !== 'string') {
       throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
     }
-    
+
     const storedData = await databaseManager.get(id);
-    
+
     if (!storedData) {
       throw new NotFoundError('Data not found or has expired', { requestedId: id });
     }
-    
+
     console.log(`📤 Retrieved data with ID: ${id}`);
     res.json(storedData);
   } catch (error) {
@@ -567,19 +759,19 @@ app.get('/api/load', async (req: Request, res: Response, next: NextFunction) => 
 app.delete('/api/store', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.query;
-    
+
     if (!id || typeof id !== 'string') {
       throw new ValidationError('Missing or invalid ID parameter', { providedId: id });
     }
-    
+
     const existed = await databaseManager.delete(id);
-    
+
     console.log(`🗑️ Deleted data with ID: ${id} (existed: ${existed})`);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       deleted: existed,
-      id 
+      id
     });
   } catch (error) {
     next(error);
@@ -590,7 +782,7 @@ app.delete('/api/store', async (req: Request, res: Response, next: NextFunction)
 app.post('/api/monitoring', generalRateLimit, (req: Request, res: Response, next: NextFunction) => {
   try {
     const { errors, metrics, usage, sessionId, userId, timestamp } = req.body;
-    
+
     if (errors && errors.length > 0) {
       console.log(`🚨 Monitoring - Errors received:`, {
         count: errors.length,
@@ -600,7 +792,7 @@ app.post('/api/monitoring', generalRateLimit, (req: Request, res: Response, next
         criticalErrors: errors.filter((e: any) => e.severity === 'critical').length
       });
     }
-    
+
     if (metrics && metrics.length > 0) {
       console.log(`📊 Monitoring - Metrics received:`, {
         count: metrics.length,
@@ -609,7 +801,7 @@ app.post('/api/monitoring', generalRateLimit, (req: Request, res: Response, next
         timestamp: new Date(timestamp).toISOString()
       });
     }
-    
+
     if (usage && usage.length > 0) {
       console.log(`👤 Monitoring - Usage events received:`, {
         count: usage.length,
@@ -618,7 +810,7 @@ app.post('/api/monitoring', generalRateLimit, (req: Request, res: Response, next
         timestamp: new Date(timestamp).toISOString()
       });
     }
-    
+
     res.json({
       success: true,
       received: {

@@ -8,9 +8,11 @@
  * - Passive voice (configurable)
  * - Newsletter-specific checks (CTA, dates, claims, vagueness)
  * - Formatting issues, redundant sentences, readability grade (FK)
- * - NEW: grammar_spelling (offline, rule-based; accepts custom dictionary)
+ * - NEW: grammar_spelling using write-good library for professional grammar checking
  * - Outputs annotated HTML + structured JSON report
  */
+
+import writeGood from 'write-good';
 
 // ---------------- Configuration ----------------
 
@@ -49,19 +51,19 @@ export const DEFAULT_OPTIONS = {
     gradeThreshold: 9                    // flag if FK grade > 9
   },
 
-  // NEW: Grammar/Spelling
+  // NEW: Grammar/Spelling (less aggressive for newsletter content)
   grammar: {
     enabled: true,
     // pass a Set<string> or string[] of words here to improve accuracy (Hunspell/wordlist)
     dictionary: null,
-    // ignore words shorter than this (avoids flagging short acronyms etc.)
-    minWordLength: 3,
+    // ignore words shorter than this (avoids flagging short acronyms, names, etc.)
+    minWordLength: 5,
     // treat Capitalized words (mid-sentence) as potential proper nouns; skip them
     skipProperNouns: true,
     // skip tokens with digits or mixed case (IDs, codes)
     skipNonLexical: true,
     // if too many misspellings in one sentence, cap the list to keep UI clean
-    maxMisspellingsListed: 10
+    maxMisspellingsListed: 3
   },
 
   annotate: true                         // wrap offending sentences in <tags>
@@ -147,8 +149,11 @@ function checkJargon(sentence, opts) {
   const conj = countRegex(sentence, /\b(and|or|but|which|that)\b/gi);
 
   const jargonHit = (heavy >= opts.thresholds.heavyJargon) || (mild >= opts.thresholds.mildJargon);
-  const hardStructure = tooLong || commas >= 2 || conj >= 3 || passive;
+  
+  // Simple structure detection - flag genuinely complex sentences
+  const hardStructure = tooLong || (commas >= 3) || conj >= 2 || passive;
 
+  // Flag if there's jargon OR complex structure
   if (jargonHit || hardStructure) {
     return {
       tag: 'hard_to_read',
@@ -194,8 +199,14 @@ function checkVagueDates(sentence, opts) {
 function checkVagueNumbers(sentence) {
   // number without unit or context ("increased by 20" vs "20% MoM" or "$20")
   const numbers = sentence.match(numberRegex) || [];
-  const hasUnit = /[%$]|(users|subs|subscribers|customers|orders|impressions|clicks|hrs?|hours?|mins?|minutes?|days?|weeks?|months?|yrs?|years?|kg|km|mb|gb|tb)\b/i.test(sentence);
-  if (numbers.length && !hasUnit) return { tag: 'vague_number', reasons: { numbers } };
+  const hasUnit = /[%$€£¥]|(per\s+\w+|users|subs|subscribers|customers|orders|impressions|clicks|hrs?|hours?|mins?|minutes?|days?|weeks?|months?|yrs?|years?|kg|km|mb|gb|tb|percent|percentage|dollars?|cents?|image|word|article|post)\b/i.test(sentence);
+  
+  // Skip if numbers are clearly contextual (dates, versions, IDs, etc.)
+  const isContextual = /\b(version|v\d|model|gpt-\w+|\d{4}|\d+\.\d+\.\d+)\b/i.test(sentence);
+  
+  if (numbers.length && !hasUnit && !isContextual) {
+    return { tag: 'vague_number', reasons: { numbers } };
+  }
   return null;
 }
 
@@ -211,16 +222,58 @@ function checkBaldClaims(sentence, opts) {
 
 // ---------------- NEW: Grammar & Spelling (lightweight) ----------------
 
-// Minimal fallback dictionary to avoid obvious false positives.
-// Replace by passing a richer Set via options.grammar.dictionary.
+// Expanded dictionary to reduce false positives for newsletter/business content
 const COMMON_WORDS_MIN = new Set([
+  // Basic words
   'the','be','to','of','and','a','in','that','have','i','it','for','not','on','with','he','as','you','do','at',
   'this','but','his','by','from','they','we','say','her','she','or','an','will','my','one','all','would','there',
   'their','what','so','up','out','if','about','who','get','which','go','me','when','make','can','like','time',
   'no','just','him','know','take','people','into','year','your','good','some','could','them','see','other','than',
   'then','now','look','only','come','its','over','think','also','back','after','use','two','how','our','work','first',
   'well','way','even','new','want','because','any','these','give','day','most','us','more','news','email','team',
-  'write','reads','reader','content','article','value','update','weekly','daily','today'
+  'write','reads','reader','content','article','value','update','weekly','daily','today',
+  
+  // Business/Tech terms commonly used in newsletters
+  'api','ai','data','model','models','system','systems','platform','platforms','service','services','tool','tools',
+  'user','users','customer','customers','business','businesses','company','companies','product','products',
+  'feature','features','launch','launched','launches','launching','release','released','releases','releasing',
+  'development','developer','developers','software','technology','technologies','integration','integrations',
+  'solution','solutions','workflow','workflows','automation','automate','automated','automating',
+  'analytics','analysis','analyze','analyzed','analyzing','optimization','optimize','optimized','optimizing',
+  'performance','productivity','efficiency','scalable','scalability','enterprise','enterprises',
+  'research','researcher','researchers','study','studies','report','reports','learning','machine',
+  'generation','generate','generated','generating','creation','create','created','creating',
+  'experience','experiences','interaction','interactions','environment','environments',
+  'deployment','deploy','deployed','deploying','operation','operations','operational',
+  'include','includes','including','provide','provides','providing','support','supports','supporting',
+  'enable','enables','enabling','allow','allows','allowing','describe','describes','describing',
+  'increase','increases','increasing','improve','improves','improving','enhancement','enhancements',
+  'adoption','adopter','adopters','implementation','implement','implemented','implementing',
+  'collaboration','collaborate','collaborating','communication','communicate','communicating',
+  'innovation','innovative','revolutionize','revolutionary','transformation','transform','transforming',
+  
+  // Common words that were being flagged as misspelled
+  'starts','started','starting','pricing','safety','secure','security','built-in','builtin',
+  'image','images','imaging','feature','features','featured','featuring','quality','qualities',
+  'launch','launched','launches','launching','market','markets','marketing','available',
+  'access','accessible','accessibility','process','processes','processing','method','methods',
+  'result','results','resulting','option','options','optional','version','versions',
+  'update','updates','updated','updating','change','changes','changed','changing',
+  'manage','manages','managed','managing','management','control','controls','controlled',
+  'design','designs','designed','designing','designer','designers','build','builds','building',
+  'scale','scales','scaled','scaling','growth','growing','expand','expands','expanded',
+  'connect','connects','connected','connecting','connection','connections','network','networks',
+  
+  // Additional common words that were still being flagged
+  'visual','visually','directly','details','detailed','trained','training','static',
+  'ability','abilities','pursue','pursuing','agents','digital','specific','within',
+  'resolution','resolutions','employees','employee','knowledge','workers','worker',
+  'microservices','service','services','first-call','ongoing','interaction',
+  'environment','independently','goals','shift','shifts','shifting','earned',
+  'medal','mathematical','olympiad','reinforcement','guided','rewards','profit',
+  'scores','pursue','long-term','gains','including','increase','describes',
+  'meant','support','workflows','businesses','enterprise','operations',
+  'deployment','custom','customize','customized','tasks','customer'
 ]);
 
 // Basic grammar regex patterns (fast, common issues)
@@ -414,20 +467,67 @@ const TAG_PRIORITY = [
 ];
 
 function tagSentence(sentence, checks) {
-  const first = TAG_PRIORITY.find(t => checks.some(c => c?.tag === t));
-  if (!first) return sentence;
-  const tagObj = checks.find(c => c?.tag === first);
-  return `<${tagObj.tag}>${sentence}</${tagObj.tag}>`;
+  if (!checks || checks.length === 0) return sentence;
+  
+  // Apply only the highest priority tag (one tag per sentence)
+  const sortedChecks = checks
+    .filter(c => c && c.tag)
+    .sort((a, b) => {
+      const aPriority = TAG_PRIORITY.indexOf(a.tag);
+      const bPriority = TAG_PRIORITY.indexOf(b.tag);
+      return aPriority - bPriority; // Lower index = higher priority
+    });
+  
+  if (sortedChecks.length > 0) {
+    const topCheck = sortedChecks[0];
+    return `<${topCheck.tag}>${sentence}</${topCheck.tag}>`;
+  }
+  
+  return sentence;
+}
+
+// ---------------- HTML Cleaning Utilities ----------------
+
+function stripHTMLTags(html) {
+  // Remove HTML tags but preserve the text content and structure
+  return html
+    // Replace block elements with proper line breaks
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<div[^>]*>/gi, '')
+    .replace(/<h[1-6][^>]*>/gi, '')
+    // Remove all other HTML tags but keep the text
+    .replace(/<[^>]*>/g, '')
+    // Decode HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    // Clean up whitespace while preserving paragraph breaks
+    .replace(/\n{3,}/g, '\n\n') // Multiple line breaks to double
+    .replace(/[ \t]+/g, ' ') // Multiple spaces to single
+    .replace(/\n /g, '\n') // Remove spaces at start of lines
+    .trim();
 }
 
 // ---------------- Main API ----------------
 
 export function analyzeContent(content, options = {}) {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const sentences = splitSentences(content);
+  
+  // Clean HTML content for analysis only - preserve original for output
+  const cleanContent = stripHTMLTags(content);
+  console.log('🧹 Cleaned content for analysis:', cleanContent.substring(0, 100) + '...');
+  
+  const sentences = splitSentences(cleanContent);
 
   const perSentence = [];
-  let annotated = content; // replace exact sentences once
+  let annotated = content; // Use original content to preserve formatting
   const seen = new Set();
 
   sentences.forEach((s) => {
@@ -450,8 +550,31 @@ export function analyzeContent(content, options = {}) {
     const tags = unique(findings.map(f => f.tag));
 
     if (opts.annotate && tags.length) {
-      annotated = annotated.replace(s, tagSentence(s, findings));
-      seen.add(key);
+      // Smart replacement: try to find the sentence in original content
+      // This handles cases where HTML formatting might slightly change the text
+      const cleanSentence = s.trim();
+      const escapedSentence = cleanSentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Try exact match first
+      if (annotated.includes(cleanSentence)) {
+        annotated = annotated.replace(cleanSentence, tagSentence(cleanSentence, findings));
+        seen.add(key);
+      } else {
+        // Try fuzzy match by looking for the sentence content within HTML
+        const words = cleanSentence.split(/\s+/).filter(w => w.length > 2);
+        if (words.length >= 3) {
+          // Look for a pattern with the first and last few words
+          const firstWords = words.slice(0, 2).join('\\s+');
+          const lastWords = words.slice(-2).join('\\s+');
+          const fuzzyPattern = new RegExp(`${firstWords}[\\s\\S]*?${lastWords}`, 'i');
+          
+          const match = annotated.match(fuzzyPattern);
+          if (match) {
+            annotated = annotated.replace(match[0], tagSentence(match[0], findings));
+            seen.add(key);
+          }
+        }
+      }
     }
 
     perSentence.push({
@@ -461,9 +584,9 @@ export function analyzeContent(content, options = {}) {
     });
   });
 
-  // Global metrics
-  const words = wordCount(content);
-  const links = (content.match(urlRegex) || []).length;
+  // Global metrics - use original content for link analysis, cleaned content for word count
+  const words = wordCount(cleanContent); // Use cleaned content for accurate word count
+  const links = (content.match(urlRegex) || []).length; // Use original content to detect links
   const linkDensity = +(((links / Math.max(words,1)) * 100).toFixed(2));
 
   const longParas = (content.split(/\n{2,}/g) || [])

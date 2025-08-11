@@ -156,7 +156,7 @@ export class ContentTagger {
   private options: ContentTaggerOptions;
 
   constructor(options: Partial<ContentTaggerOptions> = {}) {
-    // Initialize with default options, will be updated when module loads
+    // Initialize with default options optimized for newsletter content
     this.options = {
       sentenceLength: { maxLength: 22 },
       allCaps: { maxAllowed: 2 },
@@ -170,6 +170,15 @@ export class ContentTagger {
       },
       maxEmojiPerSentence: 3,
       maxLinksPer100Words: 3,
+      // Enable grammar checking with reasonable settings
+      grammar: {
+        enabled: true, // Re-enabled with balanced settings
+        minWordLength: 5, // Skip short words (acronyms, names, etc.)
+        skipProperNouns: true, // Skip capitalized words (company names, etc.)
+        skipNonLexical: true, // Skip technical terms and abbreviations
+        maxMisspellingsListed: 2, // Limit to keep UI clean
+        dictionary: null // Use the expanded default dictionary
+      },
       ...options
     };
   }

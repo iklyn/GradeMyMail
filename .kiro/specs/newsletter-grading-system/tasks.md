@@ -166,7 +166,7 @@
   - Create clean metrics display with A-F grading scale
   - _Requirements: 2.1, 2.2, 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 7.4. Create unified analysis pipeline with dual-system approach
+- [x] 7.4. Create unified analysis pipeline with dual-system approach
   - Design Apple-like seamless integration between rule-based and AI systems
   - Implement rule-based highlighting for immediate visual feedback
   - Use Groq Gemma AI for comprehensive analysis summary and scoring
@@ -177,10 +177,13 @@
 - [ ] 7.5. Update frontend services to use new GroqGemma infrastructure
   - Modify analysisEngine.ts to work with new dual-system approach
   - Update api.ts to communicate with new GroqGemma endpoints
+  - Fix word count calculation to use result.global.wordCount from content tagger instead of calculating from tagged content
+  - Add link density and readability scores from results.global to metrics display
+  - Create space for displaying summary and improvements from Gemma AI analysis
   - Implement clean error handling and fallback mechanisms
   - Add real-time highlighting updates with rule-based system
   - Create seamless user experience with instant feedback and comprehensive analysis
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 5.1, 5.2, 5.3_
 
 - [ ] 7.6. Polish and optimize the new AI system integration
   - Ensure Apple-like smooth performance and responsiveness

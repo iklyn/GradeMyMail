@@ -220,29 +220,23 @@ const GradeMyMail: React.FC = () => {
       console.log('🔍 Starting newsletter analysis with GroqGemma dual-system approach...');
       console.log(`📊 Content stats: ${content.length} chars, ${content.split(/\s+/).length} words`);
 
-      // Run both systems in parallel for optimal performance
-      const [highlightingResponse, scoringResponse] = await Promise.all([
-        // Rule-based highlighting system for immediate visual feedback
-        apiService.analyzeNewsletter(content, 'newsletter-highlighting'),
-        // Groq Gemma AI for comprehensive scoring and analysis
-        apiService.scoreNewsletter(content, 'newsletter-scoring')
-      ]);
+      // Use unified dual-system analysis endpoint
+      const unifiedResponse = await apiService.analyzeNewsletter(content, 'newsletter-unified');
 
-      console.log('✅ Dual-system analysis completed successfully');
-      console.log('🎯 Rule-based highlighting:', highlightingResponse.metadata?.model || 'groq-gemma-rule-based');
-      console.log('🤖 AI scoring model:', scoringResponse.metadata?.model || 'groq-gemma-2-9b-it');
+      console.log('✅ Unified dual-system analysis completed successfully');
+      console.log('🎯 System health:', unifiedResponse.metadata?.systemHealth || 'unknown');
+      console.log('🤖 Models used:', unifiedResponse.metadata?.systems || 'unknown');
 
       // LOG THE EXACT AI OUTPUT FOR DEBUGGING
-      console.log('🔍 === DUAL SYSTEM OUTPUT ===');
-      console.log('📄 Highlighting Response:', highlightingResponse);
-      console.log('📊 Scoring Response:', scoringResponse);
-      console.log('🔍 === END DUAL SYSTEM OUTPUT ===');
+      console.log('🔍 === UNIFIED SYSTEM OUTPUT ===');
+      console.log('📄 Unified Response:', unifiedResponse);
+      console.log('🔍 === END UNIFIED SYSTEM OUTPUT ===');
 
       // Set analysis result for highlighting (rule-based system)
-      setAnalysisResult(highlightingResponse);
+      setAnalysisResult(unifiedResponse);
 
       // Set metrics from Gemma AI scoring system
-      setMetrics(scoringResponse.metrics);
+      setMetrics(unifiedResponse.metrics);
 
       setHasContentChanged(false); // Reset the changed flag after analysis
 
@@ -250,7 +244,8 @@ const GradeMyMail: React.FC = () => {
       setAiModelStatus(prev => ({
         ...prev,
         currentModel: 'groq-gemma-dual-system',
-        isHealthy: true,
+        isHealthy: unifiedResponse.metadata?.systemHealth?.ruleBased && unifiedResponse.metadata?.systemHealth?.gemmaAI,
+        usingFallback: unifiedResponse.metadata?.systems?.highlighting === 'fallback' || unifiedResponse.metadata?.systems?.scoring === 'fallback',
         lastChecked: new Date(),
       }));
 
