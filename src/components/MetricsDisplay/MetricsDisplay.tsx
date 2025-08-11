@@ -11,6 +11,8 @@ export interface NewsletterMetrics {
   readingTime?: number;
   summary?: string[];
   improvements?: string[];
+  readabilityGrade?: number;  // Flesch-Kincaid grade level
+  linkDensity?: number;       // Links per 100 words
 }
 
 export interface MetricsDisplayProps {

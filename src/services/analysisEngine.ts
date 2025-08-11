@@ -20,7 +20,7 @@ import {
   takeUntil
 } from 'rxjs/operators';
 import { apiService, APIError } from './api';
-import type { AnalyzeResponse } from './api';
+import type { AnalyzeResponse, UnifiedAnalysisResponse } from './api';
 
 // Content extraction interface
 export interface ExtractedContent {
@@ -36,7 +36,7 @@ export interface ExtractedContent {
 export interface AnalysisState {
   isAnalyzing: boolean;
   content: ExtractedContent | null;
-  result: AnalyzeResponse | null;
+  result: UnifiedAnalysisResponse | null;
   error: APIError | null;
   lastAnalyzedAt: Date | null;
   requestId: string | null;
@@ -66,18 +66,18 @@ const DEFAULT_CONFIG: AnalysisConfig = {
 
 // Cache entry interface
 interface CacheEntry {
-  result: AnalyzeResponse;
+  result: UnifiedAnalysisResponse;
   timestamp: Date;
   contentHash: string;
 }
 
 // Request deduplication manager
 class RequestDeduplicationManager {
-  private activeRequests = new Map<string, Observable<AnalyzeResponse>>();
+  private activeRequests = new Map<string, Observable<UnifiedAnalysisResponse>>();
   private requestCounter = 0;
 
   // Get or create a request for the given content hash
-  getOrCreateRequest(contentHash: string, requestFactory: () => Observable<AnalyzeResponse>): Observable<AnalyzeResponse> {
+  getOrCreateRequest(contentHash: string, requestFactory: () => Observable<UnifiedAnalysisResponse>): Observable<UnifiedAnalysisResponse> {
     // Check if there's already an active request for this content
     const existingRequest = this.activeRequests.get(contentHash);
     if (existingRequest) {
@@ -124,7 +124,7 @@ class AnalysisCacheManager {
   private maxCacheSize = 100; // Maximum number of cached entries
 
   // Get cached result if valid
-  get(contentHash: string, expiryMs: number): AnalyzeResponse | null {
+  get(contentHash: string, expiryMs: number): UnifiedAnalysisResponse | null {
     const entry = this.cache.get(contentHash);
     if (!entry) return null;
 
@@ -139,7 +139,7 @@ class AnalysisCacheManager {
   }
 
   // Set cached result
-  set(contentHash: string, result: AnalyzeResponse): void {
+  set(contentHash: string, result: UnifiedAnalysisResponse): void {
     // Implement LRU eviction if cache is full
     if (this.cache.size >= this.maxCacheSize) {
       const firstKey = this.cache.keys().next().value;
@@ -298,8 +298,8 @@ export class RealTimeAnalysisEngine {
     console.log('🔧 Real-time analysis pipeline initialized');
   }
 
-  // Perform analysis with caching and deduplication
-  private performAnalysis(content: ExtractedContent): Observable<AnalyzeResponse> {
+  // Perform analysis with caching and deduplication using GroqGemma infrastructure
+  private performAnalysis(content: ExtractedContent): Observable<UnifiedAnalysisResponse> {
     // Check cache first if enabled
     if (this.config.enableCaching) {
       const cachedResult = this.cacheManager.get(content.contentHash, this.config.cacheExpiryMs);
@@ -308,14 +308,14 @@ export class RealTimeAnalysisEngine {
       }
     }
 
-    // Create analysis request factory
+    // Create analysis request factory using the new GroqGemma unified endpoint
     const requestFactory = () => {
       const requestId = `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       return timer(0).pipe(
         switchMap(() => {
-          console.log(`🔍 Starting analysis request: ${requestId}`);
-          return apiService.analyzeEmail(content.plainText, requestId);
+          console.log(`🔍 Starting GroqGemma unified analysis request: ${requestId}`);
+          return apiService.analyzeNewsletter(content.plainText, requestId);
         }),
         retry({
           count: this.config.maxRetries,
@@ -368,7 +368,7 @@ export class RealTimeAnalysisEngine {
   }
 
   // Get last analysis result
-  getLastResult(): AnalyzeResponse | null {
+  getLastResult(): UnifiedAnalysisResponse | null {
     return this.stateSubject.value.result;
   }
 

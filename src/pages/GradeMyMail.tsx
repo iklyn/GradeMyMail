@@ -12,6 +12,7 @@ import Logo from '../components/ui/Logo';
 import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { MetricsDisplay, type NewsletterMetrics } from '../components/MetricsDisplay';
+import { AnalysisInsights } from '../components/AnalysisInsights';
 import { calculateNewsletterMetrics } from '../utils/metricsCalculator';
 import { apiService } from '../services/api';
 
@@ -235,8 +236,20 @@ const GradeMyMail: React.FC = () => {
       // Set analysis result for highlighting (rule-based system)
       setAnalysisResult(unifiedResponse);
 
-      // Set metrics from Gemma AI scoring system
-      setMetrics(unifiedResponse.metrics);
+      // Combine metrics from both systems (rule-based + Gemma AI)
+      const combinedMetrics = {
+        ...unifiedResponse.metrics,
+        // Use word count from rule-based analysis (more accurate)
+        wordCount: unifiedResponse.analysisResult?.report?.global?.wordCount || unifiedResponse.metrics.wordCount,
+        // Add readability and link density from rule-based analysis
+        readabilityGrade: unifiedResponse.analysisResult?.report?.global?.readability?.fleschKincaidGrade,
+        linkDensity: unifiedResponse.analysisResult?.report?.global?.linkDensityPer100Words,
+        // Ensure Gemma AI summary and improvements are included
+        summary: unifiedResponse.metrics.summary || [],
+        improvements: unifiedResponse.metrics.improvements || [],
+      };
+
+      setMetrics(combinedMetrics);
 
       setHasContentChanged(false); // Reset the changed flag after analysis
 
@@ -526,14 +539,72 @@ John`;
           </div>
         )}
 
-        {/* Metrics Display - Only show when content hasn't changed */}
+        {/* Technical Metrics - Below AI Health Status */}
+        {metrics && !hasContentChanged && !isAnalyzing && (metrics.readabilityGrade !== undefined || metrics.linkDensity !== undefined) && (
+          <div className="mt-6 text-center animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
+            <div className="inline-flex items-center space-x-8 text-sm bg-gray-50 dark:bg-[#2C2C2E] px-6 py-3 rounded-full">
+              {/* Readability Score */}
+              {metrics.readabilityGrade !== undefined && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-gray-500 dark:text-[#8E8E93]">Readability:</span>
+                  <span className={`font-semibold ${
+                    metrics.readabilityGrade <= 6 ? 'text-green-600 dark:text-[#30D158]' :
+                    metrics.readabilityGrade <= 9 ? 'text-blue-600 dark:text-[#007AFF]' :
+                    metrics.readabilityGrade <= 12 ? 'text-yellow-600 dark:text-[#FFD60A]' :
+                    metrics.readabilityGrade <= 16 ? 'text-orange-600 dark:text-[#FF9F0A]' :
+                    'text-red-600 dark:text-[#FF453A]'
+                  }`}>
+                    {metrics.readabilityGrade.toFixed(1)} grade
+                  </span>
+                </div>
+              )}
+              
+              {/* Separator */}
+              {metrics.readabilityGrade !== undefined && metrics.linkDensity !== undefined && (
+                <div className="w-1.5 h-1.5 bg-gray-300 dark:bg-[#8E8E93] rounded-full"></div>
+              )}
+              
+              {/* Link Density */}
+              {metrics.linkDensity !== undefined && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-gray-500 dark:text-[#8E8E93]">Links:</span>
+                  <span className={`font-semibold ${
+                    metrics.linkDensity <= 2 ? 'text-green-600 dark:text-[#30D158]' :
+                    metrics.linkDensity <= 4 ? 'text-yellow-600 dark:text-[#FFD60A]' :
+                    'text-red-600 dark:text-[#FF453A]'
+                  }`}>
+                    {metrics.linkDensity.toFixed(1)}/100 words
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Results Section - Only show when content hasn't changed */}
         {metrics && !hasContentChanged && !isAnalyzing && (
-          <div className="mt-12 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <div className="max-w-md mx-auto">
-              <MetricsDisplay
-                metrics={metrics}
-                className="shadow-lg"
-              />
+          <div className="mt-16 space-y-12">
+            {/* Side by Side Layout - Better Spacing & Alignment */}
+            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+              {/* Metrics Display - Takes 2 columns, positioned left */}
+              <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                <div className="sticky top-8">
+                  <MetricsDisplay
+                    metrics={metrics}
+                    className="shadow-lg"
+                  />
+                </div>
+              </div>
+
+              {/* Analysis Insights - Takes 3 columns, positioned right */}
+              <div className="lg:col-span-3 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+                <div className="pl-4 lg:pl-8">
+                  <AnalysisInsights
+                    metrics={metrics}
+                    className=""
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}

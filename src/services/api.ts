@@ -8,7 +8,7 @@ export class ValidationError extends Error {
   }
 }
 
-// API response interfaces
+// API response interfaces for GroqGemma dual-system
 export interface AnalyzeResponse {
   message: {
     content: string; // Tagged content with XML-style markers
@@ -30,6 +30,93 @@ export interface LoadResponse {
     fullOriginalText: string;
     fullOriginalHTML: string;
     taggedContent: string;
+  };
+}
+
+// New GroqGemma unified analysis response
+export interface UnifiedAnalysisResponse {
+  // Rule-based highlighting data
+  analysisResult: {
+    annotated: string;
+    report: {
+      perSentence: Array<{
+        sentence: string;
+        tags: string[];
+        reasons: Record<string, any>;
+      }>;
+      global: {
+        wordCount: number;
+        sentenceCount: number;
+        linkCount: number;
+        linkDensityPer100Words: number;
+        longParagraphs: number[];
+        readability: {
+          fleschKincaidGrade: number;
+          threshold: number;
+        };
+        flags: Array<{
+          tag: string;
+          reasons: Record<string, any>;
+        }>;
+      };
+    };
+  };
+  summary: {
+    score: number;
+    grade: string;
+    issueCounts: {
+      high: number;
+      medium: number;
+      low: number;
+      info: number;
+    };
+    issueTypes: string[];
+    metrics: {
+      wordCount: number;
+      sentenceCount: number;
+      readabilityGrade: number;
+      linkDensity: number;
+    };
+    globalFlags: Array<{
+      tag: string;
+      reasons: Record<string, any>;
+    }>;
+  };
+  ranges: Array<{
+    start: number;
+    end: number;
+    type: string;
+    priority: string;
+    message?: string;
+    suggestion?: string;
+  }>;
+  // Gemma AI scoring data
+  metrics: {
+    overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+    audienceFit: number;
+    tone: number;
+    clarity: number;
+    engagement: number;
+    spamRisk: number;
+    wordCount: number;
+    readingTime: number;
+    summary: string[];
+    improvements: string[];
+  };
+  // Unified metadata
+  metadata: {
+    model: string;
+    systems: {
+      highlighting: string;
+      scoring: string;
+    };
+    timestamp: string;
+    processingTime: number;
+    cached: boolean;
+    systemHealth: {
+      ruleBased: boolean;
+      gemmaAI: boolean;
+    };
   };
 }
 
@@ -257,9 +344,9 @@ export const getServiceStatus = async (): Promise<{
     const apiHealth = await checkAPIHealth();
     status.api = apiHealth.healthy;
 
-    // Check AI service
+    // Check AI service using GroqGemma infrastructure
     try {
-      await apiClient.post('/analyze', { message: 'health check' }, { timeout: 10000 });
+      await apiClient.post('/analyze', { content: 'health check' }, { timeout: 10000 });
       status.ai = true;
     } catch {
       status.ai = false;
@@ -519,25 +606,8 @@ export const apiService = {
   // Service status check
   getServiceStatus,
 
-  // Unified newsletter analysis with dual-system approach (highlighting + scoring)
-  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<{
-    analysisResult: any;
-    summary: any;
-    ranges: any[];
-    metrics: {
-      overallGrade: 'A' | 'B' | 'C' | 'D' | 'F';
-      audienceFit: number;
-      tone: number;
-      clarity: number;
-      engagement: number;
-      spamRisk: number;
-      wordCount: number;
-      readingTime: number;
-      summary: string[];
-      improvements: string[];
-    };
-    metadata: any;
-  }> {
+  // Unified newsletter analysis with GroqGemma dual-system approach (highlighting + scoring)
+  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<UnifiedAnalysisResponse> {
     const controller = requestManager.createController(requestKey);
     
     try {
@@ -551,7 +621,7 @@ export const apiService = {
       }
 
       const response = await withRetry(
-        () => apiClient.post(
+        () => apiClient.post<UnifiedAnalysisResponse>(
           '/analyze',
           { content },
           { signal: controller.signal }

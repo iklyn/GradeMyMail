@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions, type UseMutationOptions } from '@tanstack/react-query';
-import { apiService, APIError, type AnalyzeResponse, type FixResponse, type StoreResponse, type LoadResponse } from './api';
+import { apiService, APIError, type AnalyzeResponse, type FixResponse, type StoreResponse, type LoadResponse, type UnifiedAnalysisResponse } from './api';
 import { useAppStore } from '../store';
 
 // Query keys for consistent caching
 export const queryKeys = {
   analyze: (content: string) => ['analyze', content] as const,
+  analyzeNewsletter: (content: string) => ['analyzeNewsletter', content] as const,
   fix: (taggedContent: string) => ['fix', taggedContent] as const,
   load: (id: string) => ['load', id] as const,
   health: () => ['health'] as const,
@@ -45,6 +46,53 @@ export const useAnalyzeEmail = (
     enabled: Boolean(content && content.trim().length > 0),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    retry: (failureCount, error) => {
+      // Don't retry validation errors
+      if ((error as APIError).type === 'validation') return false;
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    ...options,
+  });
+
+  return query;
+};
+
+// Custom hook for GroqGemma newsletter analysis with dual-system approach
+export const useAnalyzeNewsletter = (
+  content: string,
+  options?: Omit<UseQueryOptions<UnifiedAnalysisResponse, APIError>, 'queryKey' | 'queryFn'>
+) => {
+  const { addError, clearAllErrors, setAnalyzing } = useAppStore();
+  
+  const query = useQuery({
+    queryKey: queryKeys.analyzeNewsletter(content),
+    queryFn: async () => {
+      setAnalyzing(true);
+      clearAllErrors();
+      try {
+        const result = await apiService.analyzeNewsletter(content);
+        setAnalyzing(false);
+        clearAllErrors();
+        return result;
+      } catch (error) {
+        setAnalyzing(false);
+        const apiError = error as APIError;
+        addError({
+          type: apiError.type,
+          severity: 'medium',
+          message: apiError.message,
+          userMessage: 'Newsletter analysis failed. Please try again.',
+          technicalMessage: apiError.message,
+          retryable: true,
+          suggestions: ['Check your internet connection', 'Try again in a moment'],
+        });
+        throw error;
+      }
+    },
+    enabled: Boolean(content && content.trim().length > 0),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     retry: (failureCount, error) => {
       // Don't retry validation errors
       if ((error as APIError).type === 'validation') return false;
@@ -209,6 +257,7 @@ export const useQueryUtils = () => {
     // Invalidate all analysis queries
     invalidateAnalysis: () => {
       queryClient.invalidateQueries({ queryKey: ['analyze'] });
+      queryClient.invalidateQueries({ queryKey: ['analyzeNewsletter'] });
     },
     
     // Invalidate all fix queries
@@ -232,6 +281,17 @@ export const useQueryUtils = () => {
       }
     },
     
+    // Prefetch newsletter analysis for content
+    prefetchNewsletterAnalysis: (content: string) => {
+      if (content && content.trim().length > 0) {
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.analyzeNewsletter(content),
+          queryFn: () => apiService.analyzeNewsletter(content),
+          staleTime: 5 * 60 * 1000,
+        });
+      }
+    },
+    
     // Cancel all ongoing queries
     cancelQueries: () => {
       queryClient.cancelQueries();
@@ -248,6 +308,11 @@ export const useOptimisticUpdates = () => {
     // Optimistically update analysis result
     updateAnalysisOptimistically: (content: string, result: AnalyzeResponse) => {
       queryClient.setQueryData(queryKeys.analyze(content), result);
+    },
+    
+    // Optimistically update newsletter analysis result
+    updateNewsletterAnalysisOptimistically: (content: string, result: UnifiedAnalysisResponse) => {
+      queryClient.setQueryData(queryKeys.analyzeNewsletter(content), result);
     },
     
     // Optimistically update fix result
