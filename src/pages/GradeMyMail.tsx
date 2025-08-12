@@ -543,19 +543,46 @@ John`;
         {metrics && !hasContentChanged && !isAnalyzing && (metrics.readabilityGrade !== undefined || metrics.linkDensity !== undefined) && (
           <div className="mt-6 text-center animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
             <div className="inline-flex items-center space-x-8 text-sm bg-gray-50 dark:bg-[#2C2C2E] px-6 py-3 rounded-full">
-              {/* Readability Score */}
+              {/* Readability Score with Newsletter Context */}
               {metrics.readabilityGrade !== undefined && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 group relative">
                   <span className="text-gray-500 dark:text-[#8E8E93]">Readability:</span>
-                  <span className={`font-semibold ${
-                    metrics.readabilityGrade <= 6 ? 'text-green-600 dark:text-[#30D158]' :
-                    metrics.readabilityGrade <= 9 ? 'text-blue-600 dark:text-[#007AFF]' :
-                    metrics.readabilityGrade <= 12 ? 'text-yellow-600 dark:text-[#FFD60A]' :
-                    metrics.readabilityGrade <= 16 ? 'text-orange-600 dark:text-[#FF9F0A]' :
-                    'text-red-600 dark:text-[#FF453A]'
-                  }`}>
-                    {metrics.readabilityGrade.toFixed(1)} grade
-                  </span>
+                  <div className="flex items-center space-x-1">
+                    <span className={`font-semibold ${
+                      metrics.readabilityGrade <= 6 ? 'text-green-600 dark:text-[#30D158]' :
+                      metrics.readabilityGrade <= 9 ? 'text-blue-600 dark:text-[#007AFF]' :
+                      metrics.readabilityGrade <= 12 ? 'text-yellow-600 dark:text-[#FFD60A]' :
+                      metrics.readabilityGrade <= 16 ? 'text-orange-600 dark:text-[#FF9F0A]' :
+                      'text-red-600 dark:text-[#FF453A]'
+                    }`}>
+                      {metrics.readabilityGrade.toFixed(1)} grade
+                    </span>
+                    
+                    {/* Newsletter Context Indicator */}
+                    {metrics.readabilityGrade > 12 && (
+                      <div className="flex items-center">
+                        <svg className="w-3 h-3 text-amber-500 dark:text-amber-400 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Tooltip for Newsletter Context */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                    <div className="text-center">
+                      <div className="font-medium mb-1">Newsletter Readability</div>
+                      <div className="space-y-0.5 text-left">
+                        <div className="text-green-400 dark:text-green-600">✓ Ideal: 6-9 grade</div>
+                        <div className="text-yellow-400 dark:text-yellow-600">⚠ OK: 10-12 grade</div>
+                        {metrics.readabilityGrade > 12 && (
+                          <div className="text-red-400 dark:text-red-600">✗ Too complex for newsletters</div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Tooltip arrow */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                  </div>
                 </div>
               )}
               
