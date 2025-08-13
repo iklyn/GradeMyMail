@@ -124,7 +124,7 @@
   - Add seamless model switching without user disruption
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3_
 
-- [x] 7. Build clean comparison view for newsletter improvements
+- [ ] 7. Build clean comparison view for newsletter improvements
   - Enhance existing VirtualizedDiffViewer with minimal side-by-side layout
   - Implement clean typography and subtle change indicators
   - Add simple copy functionality for improved content

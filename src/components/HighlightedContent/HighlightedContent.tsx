@@ -8,121 +8,131 @@ interface HighlightedContentProps {
   className?: string;
 }
 
-// Apple-inspired highlight styles for all rule-based system tags
+// Apple-inspired highlight styles optimized for both light and dark modes
 const highlightStyles = {
-  // High priority issues (red)
+  // High priority issues (red) - Enhanced for dark mode visibility
   spam_words: {
-    backgroundColor: 'rgba(255, 59, 48, 0.12)', // SF Red with 12% opacity
+    backgroundColor: 'rgba(255, 69, 58, 0.2)', // Brighter red with higher opacity for dark mode
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 59, 48, 0.2)',
+    border: '1px solid rgba(255, 69, 58, 0.4)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 69, 58, 0.1)',
   },
   grammar_spelling: {
-    backgroundColor: 'rgba(255, 59, 48, 0.12)', // SF Red with 12% opacity
+    backgroundColor: 'rgba(255, 69, 58, 0.2)', // Brighter red with higher opacity for dark mode
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 59, 48, 0.2)',
+    border: '1px solid rgba(255, 69, 58, 0.4)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 69, 58, 0.1)',
   },
   claim_without_evidence: {
-    backgroundColor: 'rgba(255, 59, 48, 0.12)', // SF Red with 12% opacity
+    backgroundColor: 'rgba(255, 69, 58, 0.2)', // Brighter red with higher opacity for dark mode
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 59, 48, 0.2)',
+    border: '1px solid rgba(255, 69, 58, 0.4)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 69, 58, 0.1)',
   },
-  // Medium priority issues (yellow)
+  // Medium priority issues (orange/amber) - Better visibility in dark mode
   hard_to_read: {
-    backgroundColor: 'rgba(255, 204, 0, 0.1)', // SF Yellow with 10% opacity
+    backgroundColor: 'rgba(255, 159, 10, 0.18)', // Warmer orange with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 204, 0, 0.15)',
+    border: '1px solid rgba(255, 159, 10, 0.35)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 159, 10, 0.1)',
   },
   fluff: {
-    backgroundColor: 'rgba(255, 204, 0, 0.1)', // SF Yellow with 10% opacity
+    backgroundColor: 'rgba(255, 159, 10, 0.18)', // Warmer orange with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 204, 0, 0.15)',
+    border: '1px solid rgba(255, 159, 10, 0.35)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 159, 10, 0.1)',
   },
   hedging: {
-    backgroundColor: 'rgba(255, 204, 0, 0.1)', // SF Yellow with 10% opacity
+    backgroundColor: 'rgba(255, 159, 10, 0.18)', // Warmer orange with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 204, 0, 0.15)',
+    border: '1px solid rgba(255, 159, 10, 0.35)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 159, 10, 0.1)',
   },
   vague_date: {
-    backgroundColor: 'rgba(255, 204, 0, 0.1)', // SF Yellow with 10% opacity
+    backgroundColor: 'rgba(255, 159, 10, 0.18)', // Warmer orange with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 204, 0, 0.15)',
+    border: '1px solid rgba(255, 159, 10, 0.35)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 159, 10, 0.1)',
   },
   vague_number: {
-    backgroundColor: 'rgba(255, 204, 0, 0.1)', // SF Yellow with 10% opacity
+    backgroundColor: 'rgba(255, 159, 10, 0.18)', // Warmer orange with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(255, 204, 0, 0.15)',
+    border: '1px solid rgba(255, 159, 10, 0.35)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(255, 159, 10, 0.1)',
   },
-  // Low priority issues (blue)
+  // Low priority issues (blue) - Enhanced for dark mode
   emoji_excess: {
-    backgroundColor: 'rgba(0, 122, 255, 0.08)', // SF Blue with 8% opacity
+    backgroundColor: 'rgba(10, 132, 255, 0.15)', // Brighter blue with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(0, 122, 255, 0.12)',
+    border: '1px solid rgba(10, 132, 255, 0.3)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(10, 132, 255, 0.1)',
   },
-  // Informational (blue)
+  // Informational (blue) - Enhanced for dark mode
   cta: {
-    backgroundColor: 'rgba(0, 122, 255, 0.08)', // SF Blue with 8% opacity
+    backgroundColor: 'rgba(10, 132, 255, 0.15)', // Brighter blue with higher opacity
     borderRadius: '4px',
     padding: '2px 4px',
     margin: '0 1px',
-    border: '1px solid rgba(0, 122, 255, 0.12)',
+    border: '1px solid rgba(10, 132, 255, 0.3)',
     transition: 'all 0.2s ease',
     display: 'inline',
     boxDecorationBreak: 'clone',
     WebkitBoxDecorationBreak: 'clone',
+    boxShadow: '0 0 0 1px rgba(10, 132, 255, 0.1)',
   },
 } as const;
 
