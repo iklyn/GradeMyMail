@@ -456,7 +456,7 @@ setInterval(() => {
 // Unified newsletter analysis endpoint with dual-system approach
 app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { content } = req.body;
+    const { content, context } = req.body;
     const startTime = (req as any).startTime || Date.now();
 
     console.log(`🔍 Starting unified dual-system analysis (${content.length} characters)...`);
@@ -480,7 +480,7 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: 
       ),
       // Groq Gemma AI for comprehensive scoring and analysis
       withRetry(
-        async () => gemmaAPIService.analyzeNewsletter(content),
+        async () => gemmaAPIService.analyzeNewsletter(content, context),
         { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 2 }
       )
     ]);

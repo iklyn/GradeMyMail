@@ -102,7 +102,7 @@ Improve Next:
   /**
    * Analyze newsletter content using Groq Gemma API
    */
-  async analyzeNewsletter(content: string): Promise<NewsletterAnalysis> {
+  async analyzeNewsletter(content: string, context?: { intendedAudience?: string; goal?: string }): Promise<NewsletterAnalysis> {
     if (!content || content.trim().length === 0) {
       throw new Error('Content cannot be empty');
     }
@@ -114,6 +114,19 @@ Improve Next:
     try {
       console.log('🤖 Analyzing newsletter with Gemma...');
       
+      // Build user message with context if provided
+      let userMessage = content;
+      if (context && (context.intendedAudience || context.goal)) {
+        const contextInfo = [];
+        if (context.intendedAudience) {
+          contextInfo.push(`Intended Audience: ${context.intendedAudience}`);
+        }
+        if (context.goal) {
+          contextInfo.push(`Newsletter Goal: ${context.goal}`);
+        }
+        userMessage = `${contextInfo.join('\n')}\n\nNewsletter Content:\n${content}`;
+      }
+
       const chatCompletion = await this.groq.chat.completions.create({
         messages: [
           {
@@ -122,7 +135,7 @@ Improve Next:
           },
           {
             role: 'user',
-            content: content,
+            content: userMessage,
           },
         ],
         model: this.config.model,

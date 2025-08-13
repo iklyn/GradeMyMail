@@ -607,7 +607,7 @@ export const apiService = {
   getServiceStatus,
 
   // Unified newsletter analysis with GroqGemma dual-system approach (highlighting + scoring)
-  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze'): Promise<UnifiedAnalysisResponse> {
+  async analyzeNewsletter(content: string, requestKey = 'newsletter-analyze', context?: { intendedAudience?: string; goal?: string }): Promise<UnifiedAnalysisResponse> {
     const controller = requestManager.createController(requestKey);
     
     try {
@@ -623,7 +623,7 @@ export const apiService = {
       const response = await withRetry(
         () => apiClient.post<UnifiedAnalysisResponse>(
           '/analyze',
-          { content },
+          { content, context },
           { signal: controller.signal }
         ),
         {

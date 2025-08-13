@@ -13,6 +13,7 @@ import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { MetricsDisplay, type NewsletterMetrics } from '../components/MetricsDisplay';
 import { AnalysisInsights } from '../components/AnalysisInsights';
+import { ContextPanel, type NewsletterContext } from '../components/ContextPanel';
 import { calculateNewsletterMetrics } from '../utils/metricsCalculator';
 import { apiService } from '../services/api';
 
@@ -28,6 +29,10 @@ const GradeMyMail: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [hasContentChanged, setHasContentChanged] = useState(false);
   const [metrics, setMetrics] = useState<NewsletterMetrics | null>(null);
+  const [context, setContext] = useState<NewsletterContext>({
+    intendedAudience: '',
+    goal: '',
+  });
   const [navigationState, setNavigationState] = useState<NavigationState>({
     isLoading: false,
     error: null,
@@ -221,8 +226,13 @@ const GradeMyMail: React.FC = () => {
       console.log('🔍 Starting newsletter analysis with GroqGemma dual-system approach...');
       console.log(`📊 Content stats: ${content.length} chars, ${content.split(/\s+/).length} words`);
 
-      // Use unified dual-system analysis endpoint
-      const unifiedResponse = await apiService.analyzeNewsletter(content, 'newsletter-unified');
+      // Use unified dual-system analysis endpoint with context
+      const hasContext = context.intendedAudience.trim() || context.goal.trim();
+      const unifiedResponse = await apiService.analyzeNewsletter(
+        content, 
+        'newsletter-unified',
+        hasContext ? context : undefined
+      );
 
       console.log('✅ Unified dual-system analysis completed successfully');
       console.log('🎯 System health:', unifiedResponse.metadata?.systemHealth || 'unknown');
@@ -320,7 +330,7 @@ const GradeMyMail: React.FC = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [content, htmlContent, handleAsyncError, enableFallbackMode]);
+  }, [content, htmlContent, context, handleAsyncError, enableFallbackMode]);
 
   const handleContentChange = useCallback((newContent: string, newHtmlContent: string) => {
     setContent(newContent);
@@ -435,7 +445,7 @@ John`;
       </header>
 
       {/* Main Content - Minimal Layout */}
-      <main className="max-w-4xl mx-auto px-6 pb-16">
+      <main className="max-w-4xl mx-auto px-6 pb-16 relative">
         {/* Editor Section - Clean and Spacious */}
         <div className="bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-white/5 rounded-xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-400 hover:shadow-md dark:hover:shadow-[0_6px_24px_rgba(0,0,0,0.5)] hover:-translate-y-1 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
           <div
@@ -476,6 +486,15 @@ John`;
               </div>
             )}
           </div>
+        </div>
+
+        {/* Context Panel - Fixed position, moved down */}
+        <div className="hidden xl:block absolute right-0 top-8 -mr-80">
+          <ContextPanel
+            context={context}
+            onChange={setContext}
+            className="animate-fade-in-right w-72"
+          />
         </div>
 
         {/* Action Buttons */}
