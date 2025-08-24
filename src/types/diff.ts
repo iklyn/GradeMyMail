@@ -28,9 +28,38 @@ export interface VirtualizedDiffProps {
   highlightedLine?: number | null;
 }
 
+// GMMeditor word diff interface
+export interface WordDiff {
+  added?: boolean;
+  removed?: boolean;
+  value: string;
+}
+
+// GMMeditor diff mapping interface
+export interface DiffMapping {
+  type: 'unchanged' | 'changed' | 'inserted' | 'deleted';
+  old: string;
+  new: string;
+  wordDiff: WordDiff[] | null;
+}
+
+// GMMeditor data interface
+export interface GMMeditorData {
+  rewritten: string;
+  mappings: DiffMapping[];
+  metadata?: {
+    model?: string;
+    processingTime?: number;
+    toneUsed?: string;
+    originalLength?: number;
+    rewrittenLength?: number;
+  };
+}
+
 export interface DiffViewerProps extends VirtualizedDiffProps {
   height?: number;
   width?: number;
   itemSize?: number;
   overscanCount?: number;
+  gmmEditorData?: GMMeditorData | null;
 }

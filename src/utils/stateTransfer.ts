@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import type { NewsletterMetrics } from '../components/MetricsDisplay';
 
 export interface EmailData {
   id: string;
@@ -6,6 +7,7 @@ export interface EmailData {
   originalHTML: string;
   taggedContent: string;
   timestamp: number;
+  gradeMyMailMetrics?: NewsletterMetrics; // Add the original Grade My Mail metrics
   metadata?: {
     wordCount: number;
     emailType?: string;

@@ -19,6 +19,20 @@ export interface FixResponse {
   message: {
     content: string; // Improved pairs in old_draft/optimized_draft format
   };
+  gmmEditor?: {
+    rewritten: string;
+    mappings: Array<{
+      type: 'unchanged' | 'changed' | 'inserted' | 'deleted';
+      old: string;
+      new: string;
+      wordDiff: Array<{
+        added?: boolean;
+        removed?: boolean;
+        value: string;
+      }> | null;
+    }>;
+    metadata?: any;
+  };
 }
 
 export interface StoreResponse {
@@ -157,13 +171,29 @@ const defaultRetryConfig: RetryConfig = {
 // Request cancellation manager
 class RequestCancellationManager {
   private controllers = new Map<string, AbortController>();
+  private lastRequestTimes = new Map<string, number>();
+  private readonly MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
 
   createController(key: string): AbortController {
+    // Check rate limiting
+    const now = Date.now();
+    const lastRequestTime = this.lastRequestTimes.get(key);
+    
+    if (lastRequestTime && (now - lastRequestTime) < this.MIN_REQUEST_INTERVAL) {
+      const waitTime = this.MIN_REQUEST_INTERVAL - (now - lastRequestTime);
+      throw new APIError(
+        `Please wait ${Math.ceil(waitTime / 1000)} seconds before making another request.`,
+        'client',
+        429
+      );
+    }
+
     // Cancel existing request with the same key
     this.cancelRequest(key);
     
     const controller = new AbortController();
     this.controllers.set(key, controller);
+    this.lastRequestTimes.set(key, now);
     return controller;
   }
 
@@ -298,6 +328,9 @@ const transformAxiosError = (error: AxiosError): APIError => {
     if (status === 400) {
       return new APIError(message || 'Invalid request data.', 'validation', status, error);
     }
+    if (status === 429) {
+      return new APIError(message || 'Too many requests. Please wait a moment and try again.', 'client', status, error);
+    }
     return new APIError(message || 'Client error occurred.', 'client', status, error);
   }
   
@@ -427,56 +460,90 @@ export const apiService = {
     }
   },
 
-  // Fix tagged content with enhanced error handling
-  async fixEmail(taggedContent: string, requestKey = 'fix'): Promise<FixResponse> {
-    const controller = requestManager.createController(requestKey);
+  // Fix tagged content with enhanced error handling - Updated to use GMMeditor
+  async fixEmail(taggedContent: string, options?: { tone?: string }, requestKey?: string): Promise<FixResponse> {
+    // Generate a truly unique request key to prevent conflicts
+    const uniqueKey = requestKey || `fix-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const controller = requestManager.createController(uniqueKey);
     
     try {
+      console.log(`🔧 [DEBUG] fixEmail called with content length: ${taggedContent.length}`);
+      
       // Validate input
       if (!taggedContent || taggedContent.trim().length === 0) {
         throw new APIError('Tagged content cannot be empty', 'validation', 400);
       }
 
-      // Check if content has valid tags
-      const tagRegex = /<(fluff|spam_words|hard_to_read)>.*?<\/\1>/g;
-      if (!tagRegex.test(taggedContent)) {
-        throw new APIError('No valid tags found in content. Please analyze the content first.', 'validation', 400);
-      }
+      // For GMMeditor, we need to extract the original text from tagged content
+      // Remove XML tags to get clean text for GMMeditor
+      const originalText = taggedContent
+        .replace(/<(fluff|spam_words|hard_to_read)>/g, '')
+        .replace(/<\/(fluff|spam_words|hard_to_read)>/g, '')
+        .trim();
 
+      console.log(`🔧 [DEBUG] Extracted original text length: ${originalText.length}`);
+
+      // Call the new GMMeditor endpoint
       const response = await withRetry(
-        () => apiClient.post<FixResponse>(
-          '/fix',
-          { message: taggedContent },
-          { signal: controller.signal }
+        () => apiClient.post(
+          '/newsletter/improve',
+          { 
+            originalText,
+            toneKey: options?.tone || 'friendly',
+            analysis: {},
+            suggestions: [],
+            options: {}
+          },
+          { 
+            signal: controller.signal,
+            timeout: 60000 // 60 seconds timeout for GMMeditor
+          }
         ),
         {
           ...defaultRetryConfig,
-          retries: 2, // Fewer retries for fix operations
+          retries: 2,
           retryCondition: (error: AxiosError) => {
-            // Don't retry validation errors or client errors
             if (error.response?.status && error.response.status < 500) return false;
             return defaultRetryConfig.retryCondition(error);
           }
         }
       );
       
-      requestManager.cleanup(requestKey);
+      requestManager.cleanup(uniqueKey);
       
-      // Validate response
-      if (!response.data?.message?.content) {
-        throw new APIError('Invalid response from fix service', 'ai', 502);
+      console.log(`🔧 [DEBUG] GMMeditor response received:`, response.data);
+      
+      // Return GMMeditor response directly with rich mapping data
+      if (response.data?.rewritten) {
+        // Return the full GMMeditor response with mappings for enhanced diff display
+        const gmmEditorResponse = {
+          message: {
+            content: response.data.rewritten
+          },
+          // Preserve the rich GMMeditor data for better diff visualization
+          gmmEditor: {
+            rewritten: response.data.rewritten,
+            mappings: response.data.mappings || [],
+            metadata: response.data.metadata
+          }
+        };
+        
+        console.log(`🔧 [DEBUG] Returning enhanced GMMeditor response with ${response.data.mappings?.length || 0} mappings`);
+        return gmmEditorResponse;
       }
       
-      return response.data;
+      throw new APIError('Invalid response from GMMeditor service', 'ai', 502);
     } catch (error) {
-      requestManager.cleanup(requestKey);
+      requestManager.cleanup(uniqueKey);
+      
+      console.error(`❌ [DEBUG] fixEmail error:`, error);
       
       // Enhanced error context
       if (error instanceof APIError) {
         error.context = {
           ...error.context,
           taggedContentLength: taggedContent.length,
-          requestKey,
+          requestKey: uniqueKey,
           operation: 'fixEmail'
         };
       }

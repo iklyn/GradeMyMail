@@ -16,7 +16,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   onChange,
   className = '',
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const handleInputChange = (field: keyof NewsletterContext, value: string) => {
     onChange({

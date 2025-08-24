@@ -50,3 +50,18 @@ export type {
   HighlightingState,
   HighlightingEngine,
 } from './highlighting';
+
+// Re-export GMMeditor types for convenience
+export type {
+  DiffMapping,
+  GMMeditorAnalysis,
+  GMMeditorOptions,
+  GMMeditorRequest,
+  GMMeditorResponse,
+  ToneOption,
+  GMMeditorMetadata,
+  GMMeditorResult,
+  ToneKey,
+} from './gmmeditor';
+
+export { TONES } from './gmmeditor';

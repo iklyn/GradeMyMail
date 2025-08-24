@@ -6,7 +6,7 @@ import { NavigationManager, type NavigationState } from '../utils/navigationUtil
 import { type EmailData } from '../utils/stateTransfer';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { StatePreservation } from '../utils/errorRecovery';
-import { MinimalPulsePopup } from '../components/LoadingScreen/MinimalLoadingPopup';
+
 import { InstructionsPopup } from '../components/InstructionsPopup';
 import Logo from '../components/ui/Logo';
 import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
@@ -376,28 +376,42 @@ John`;
     }
 
     try {
+      // Start the improvement loading screen
+      setNavigationState(prev => ({ ...prev, isLoading: true, progress: 0 }));
+
       StatePreservation.preserveState('navigation-to-fixmymail', {
         fromPage: 'GradeMyMail',
         hasAnalysis: true
       });
 
+      setNavigationState(prev => ({ ...prev, progress: 20 }));
+
       const emailData: Omit<EmailData, 'id' | 'timestamp'> = {
         originalText: content,
         originalHTML: htmlContent,
         taggedContent,
+        gradeMyMailMetrics: metrics, // Pass the actual Grade My Mail metrics
         metadata: {
           wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
           emailType: 'general',
         },
       };
 
+      setNavigationState(prev => ({ ...prev, progress: 50 }));
+
       await NavigationManager.navigateToFixMyMail(
         navigate,
         emailData,
-        setNavigationState
+        (navState) => {
+          setNavigationState(prev => ({ 
+            ...prev, 
+            progress: Math.max(prev.progress, 50 + (navState.progress * 0.5))
+          }));
+        }
       );
 
     } catch (error) {
+      setNavigationState(prev => ({ ...prev, isLoading: false, progress: 0 }));
       handleAsyncError(
         error instanceof Error ? error : new Error('Navigation failed'),
         {
@@ -410,12 +424,11 @@ John`;
         }
       );
     }
-  }, [navigate, content, htmlContent, analysisResult, handleAsyncError]);
+  }, [navigate, content, htmlContent, analysisResult, metrics, handleAsyncError]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#1C1C1E] transition-colors duration-300">
-      {/* Minimal Loading Popup */}
-      <MinimalPulsePopup isVisible={isAnalyzing} message="Analyzing your email..." />
+
 
       {/* Instructions Popup */}
       <InstructionsPopup />
@@ -504,27 +517,43 @@ John`;
             <button
               onClick={handleAnalyzeClick}
               disabled={isAnalyzing}
-              className="bg-black hover:bg-gray-800 dark:bg-[#03FF40] dark:hover:bg-[#00e639] disabled:bg-gray-400 dark:disabled:bg-[#8E8E93] text-white dark:text-black px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl disabled:transform-none disabled:shadow-none animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-black/50 dark:focus:ring-[#03FF40]/50 focus:ring-offset-2"
+              className="bg-black hover:bg-gray-800 dark:bg-[#03FF40] dark:hover:bg-[#00e639] disabled:bg-gray-400 dark:disabled:bg-[#8E8E93] text-white dark:text-black px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl disabled:transform-none disabled:shadow-none animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-black/50 dark:focus:ring-[#03FF40]/50 focus:ring-offset-2 min-w-[120px]"
             >
-              <span className="relative z-10">
+              <span className={`relative z-10 flex items-center justify-center ${isAnalyzing ? 'animate-pulse' : ''}`}>
+                {isAnalyzing && (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                )}
                 {isAnalyzing ? 'Analyzing...' : 'Analyze'}
               </span>
               {!isAnalyzing && (
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700 ease-out"></div>
               )}
+              {isAnalyzing && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+              )}
             </button>
           )}
 
           {/* Improve Button - Only after analysis and content hasn't changed */}
-          {analysisResult && !hasContentChanged && !navigationState.isLoading && (
+          {analysisResult && !hasContentChanged && (
             <button
               onClick={handleFixMyMailClick}
               disabled={isAnalyzing || navigationState.isLoading}
-              className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:ring-offset-2"
+              className="bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 disabled:bg-orange-300 dark:disabled:bg-orange-700 text-white px-8 py-3 rounded-xl font-medium transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) transform hover:scale-105 hover:-translate-y-1 hover:shadow-xl disabled:transform-none disabled:shadow-none animate-fade-in-up relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:ring-offset-2 min-w-[120px]"
               style={{ animationDelay: '0.2s' }}
             >
-              <span className="relative z-10">Improve</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700 ease-out"></div>
+              <span className={`relative z-10 flex items-center justify-center ${navigationState.isLoading ? 'animate-pulse' : ''}`}>
+                {navigationState.isLoading && (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                )}
+                {navigationState.isLoading ? 'Loading...' : 'Improve'}
+              </span>
+              {!navigationState.isLoading && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700 ease-out"></div>
+              )}
+              {navigationState.isLoading && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+              )}
             </button>
           )}
         </div>

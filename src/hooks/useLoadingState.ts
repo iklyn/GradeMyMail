@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-export type LoadingType = 'analysis' | 'improvement' | 'general' | 'navigation';
+export type LoadingType = 'analysis' | 'navigation' | 'processing' | 'saving';
 
 interface LoadingState {
   isLoading: boolean;
-  type: LoadingType;
+  type: LoadingType | null;
+  message: string;
   progress: number;
-  message?: string;
 }
 
 interface UseLoadingStateReturn {
@@ -21,9 +21,9 @@ interface UseLoadingStateReturn {
 export const useLoadingState = (): UseLoadingStateReturn => {
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
-    type: 'general',
+    type: null,
+    message: '',
     progress: 0,
-    message: undefined
   });
 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,22 +33,22 @@ export const useLoadingState = (): UseLoadingStateReturn => {
     setLoadingState({
       isLoading: true,
       type,
+      message: message || '',
       progress: 0,
-      message
     });
   }, []);
 
   const updateProgress = useCallback((progress: number) => {
     setLoadingState(prev => ({
       ...prev,
-      progress: Math.min(100, Math.max(0, progress))
+      progress: Math.max(0, Math.min(100, progress)),
     }));
   }, []);
 
   const setMessage = useCallback((message: string) => {
     setLoadingState(prev => ({
       ...prev,
-      message
+      message,
     }));
   }, []);
 
@@ -65,9 +65,9 @@ export const useLoadingState = (): UseLoadingStateReturn => {
 
     setLoadingState({
       isLoading: false,
-      type: 'general',
+      type: null,
+      message: '',
       progress: 0,
-      message: undefined
     });
   }, []);
 
@@ -81,10 +81,8 @@ export const useLoadingState = (): UseLoadingStateReturn => {
     }
 
     let currentProgress = 0;
-    const increment = 100 / (duration / 100); // Update every 100ms
-
     progressIntervalRef.current = setInterval(() => {
-      currentProgress += increment;
+      currentProgress += Math.random() * 10;
       
       if (currentProgress >= 100) {
         updateProgress(100);

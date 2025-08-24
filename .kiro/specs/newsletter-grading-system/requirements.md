@@ -125,3 +125,87 @@ The Newsletter Grading System is a clean, Apple-inspired web application that he
 3. WHEN viewing improvements THEN the user SHALL be able to navigate with arrow keys
 4. WHEN copying improved content THEN the user SHALL be able to use Cmd+Shift+C
 5. WHEN keyboard shortcuts are used THEN the system SHALL provide subtle visual feedback
+
+### Requirement 11
+
+**User Story:** As a newsletter writer, I want Fix My Mail to be completely rebuilt using GMMeditor AI capabilities with Llama 3.1, so that I can access professional-grade editing tools with sophisticated rewriting capabilities.
+
+#### Acceptance Criteria
+
+1. WHEN a user navigates to Fix My Mail THEN the system SHALL completely remove the current mockFixEmail system and implement GMMeditor rewriteWithLlama31
+2. WHEN the AI editing process completes THEN the system SHALL display both original and improved content using the VirtualizedDiffViewer with real AI-generated improvements
+3. WHEN content is being processed THEN the system SHALL show progress indicators consistent with Grade My Mail's MinimalPulsePopup
+4. IF the GMMeditor Groq API fails THEN the system SHALL gracefully fallback to Grade My Mail's intelligent fallback analysis system
+5. WHEN displaying the interface THEN the system SHALL maintain the same Apple-like design consistency as Grade My Mail
+
+### Requirement 12
+
+**User Story:** As a content creator, I want to control the tone and style of my email improvements in Fix My Mail using the GMMeditor tone system, so that I can maintain my brand voice and audience expectations with real AI-powered rewriting.
+
+#### Acceptance Criteria
+
+1. WHEN a user accesses Fix My Mail THEN the system SHALL provide a tone selector with GMMeditor's TONES options (Professional, Friendly, Persuasive, Analytical, Storytelling)
+2. WHEN a user selects a different tone THEN the system SHALL call rewriteWithLlama31 with the new toneKey parameter to regenerate content
+3. WHEN tone changes are applied THEN the system SHALL update the diff view using mapDrafts to show the new AI-generated improvements
+4. WHEN no tone is selected THEN the system SHALL default to "friendly" toneKey as defined in GMMeditor
+5. WHEN tone controls are displayed THEN they SHALL use the same styling patterns as Grade My Mail components
+
+### Requirement 13
+
+**User Story:** As a newsletter editor, I want to see detailed readability and improvement metrics in the new Fix My Mail, so that I can understand how the GMMeditor AI changes enhance my content quality.
+
+#### Acceptance Criteria
+
+1. WHEN content improvements are generated THEN the system SHALL display readability grade improvements using GMMeditor's analysis capabilities in a metrics panel
+2. WHEN analysis completes THEN the system SHALL show before/after statistics for clarity, engagement, and spam risk using the same metrics system as Grade My Mail
+3. WHEN metrics are displayed THEN the system SHALL use the same styling patterns as Grade My Mail's MetricsDisplay component
+4. WHEN improvements reduce readability grade THEN the system SHALL highlight this as a positive change
+5. WHEN showing metrics THEN the system SHALL maintain the clean, minimal aesthetic of the overall application
+
+### Requirement 14
+
+**User Story:** As a content writer, I want to see how the GMMeditor AI improved my content with clear highlighting of changes, so that I can understand what was modified and why.
+
+#### Acceptance Criteria
+
+1. WHEN GMMeditor rewriteWithLlama31 completes THEN the system SHALL receive both the improved text and mappings from mapDrafts function
+2. WHEN displaying improvements THEN the system SHALL use the VirtualizedDiffViewer to show original vs improved content with highlighting
+3. WHEN showing changes THEN the system SHALL use mapDrafts to identify unchanged, changed, inserted, and deleted sections
+4. WHEN changes are highlighted THEN the system SHALL show word-level differences using the wordDiff data from mapDrafts
+5. WHEN displaying the diff THEN the system SHALL maintain the same clean styling as the current VirtualizedDiffViewer component
+
+### Requirement 15
+
+**User Story:** As a user, I want real-time feedback during the new GMMeditor-powered Fix My Mail improvement process, so that I understand what the AI is doing and can track progress.
+
+#### Acceptance Criteria
+
+1. WHEN GMMeditor AI processing begins THEN the system SHALL show detailed progress indicators with descriptive messages about the rewriting process
+2. WHEN different processing stages occur THEN the system SHALL update progress messages to reflect current operations (analyzing content, applying tone, optimizing readability)
+3. WHEN processing takes longer than expected THEN the system SHALL provide reassuring feedback about the Groq API operation status
+4. WHEN processing completes THEN the system SHALL smoothly transition to the results view showing the mapDrafts comparison
+5. WHEN showing progress THEN the system SHALL use the same loading patterns and animations as Grade My Mail
+
+### Requirement 16
+
+**User Story:** As a user, I want to understand how the GMMeditor AI highlighting system works differently from the old tagged system, so that I can see precise improvements without needing pre-tagged content.
+
+#### Acceptance Criteria
+
+1. WHEN the AI processes content THEN the system SHALL use rewriteWithLlama31 to generate improved text directly from the original content
+2. WHEN improvements are generated THEN the system SHALL use mapDrafts to automatically create sentence-level and word-level diff mappings
+3. WHEN displaying changes THEN the system SHALL show unchanged sentences, changed sentences with word-level highlighting, inserted content, and deleted content
+4. WHEN content has no tagged issues THEN the system SHALL still be able to improve it using the AI's understanding of good writing
+5. WHEN showing improvements THEN the system SHALL not require the old fluff/spam_words/hard_to_read tags from Grade My Mail analysis
+
+### Requirement 17
+
+**User Story:** As a developer, I want to completely remove the old mock-based Fix My Mail system, so that there are no legacy dependencies or fallback to the fake AI system.
+
+#### Acceptance Criteria
+
+1. WHEN implementing the new Fix My Mail THEN the system SHALL remove all references to mockFixEmail functionality
+2. WHEN the backend is updated THEN the system SHALL remove the /api/fix endpoint that uses mock improvements
+3. WHEN error handling is implemented THEN the system SHALL never fallback to the old mock system
+4. WHEN the new system fails THEN the system SHALL only fallback to Grade My Mail's intelligent analysis system
+5. WHEN the implementation is complete THEN no traces of the old mock-based system SHALL remain in the codebase

@@ -18,6 +18,13 @@ import {
 } from './monitoring.js';
 import { withRetry, RETRY_CONFIGS } from './retry-logic.js';
 
+// Import GroqGemma content tagger and Gemma API service
+import { contentTagger, type ContentAnalysisResult } from './ai-engines/content-tagger.js';
+import { gemmaAPIService, type NewsletterAnalysis } from './ai-engines/gemma-api.js';
+
+// Import GMMeditor functions for Fix My Mail
+import { rewriteWithLlama31, getToneOptions, TONES } from './ai-engines/rewriteWithLlama31.js';
+
 // Types for API requests and responses
 interface AnalyzeRequest {
   message: string;
@@ -33,6 +40,49 @@ interface StoreRequest {
     fullOriginalText: string;
     fullOriginalHTML: string;
     taggedContent: string;
+  };
+}
+
+// GMMeditor interfaces for Fix My Mail
+interface GMMeditorRequest {
+  originalText: string;
+  toneKey?: 'professional' | 'friendly' | 'persuasive' | 'analytical' | 'storytelling';
+  analysis?: {
+    readabilityGrade?: number;
+    audienceFit?: number;
+    toneScore?: number;
+    clarity?: number;
+    engagement?: number;
+    spamRisk?: number;
+  };
+  suggestions?: string[];
+  options?: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    targetGradeLow?: number;
+    targetGradeHigh?: number;
+  };
+}
+
+interface GMMeditorResponse {
+  rewritten: string;
+  mappings: Array<{
+    type: 'unchanged' | 'changed' | 'inserted' | 'deleted';
+    old: string;
+    new: string;
+    wordDiff: Array<{
+      added?: boolean;
+      removed?: boolean;
+      value: string;
+    }> | null;
+  }>;
+  metadata: {
+    model: string;
+    processingTime: number;
+    toneUsed: string;
+    originalLength: number;
+    rewrittenLength: number;
   };
 }
 
@@ -129,12 +179,12 @@ app.use(morgan(morganFormat, {
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 const createRateLimit = (windowMs: number, max: number, message: string) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const ip = req.ip || req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
     const now = Date.now();
 
     if (Math.random() < 0.01) {
-      for (const [key, data] of rateLimitStore.entries()) {
+      for (const [key, data] of Array.from(rateLimitStore.entries())) {
         if (now > data.resetTime) {
           rateLimitStore.delete(key);
         }
@@ -159,11 +209,12 @@ const createRateLimit = (windowMs: number, max: number, message: string) => {
     });
 
     if (current.count > max) {
-      return res.status(429).json({
+      res.status(429).json({
         error: 'Too many requests',
         message,
         retryAfter: Math.ceil((current.resetTime - now) / 1000),
       });
+      return;
     }
 
     next();
@@ -332,22 +383,44 @@ const mockFixEmail = async (taggedContent: string): Promise<string> => {
     { original: 'incredible', improved: 'remarkable' },
     { original: 'fantastic', improved: 'outstanding' },
     { original: 'free', improved: 'complimentary' },
-    { original: 'urgent', improved: 'time-sensitive' }
+    { original: 'urgent', improved: 'time-sensitive' },
+    { original: 'act now', improved: 'take action' },
+    { original: 'limited time', improved: 'time-limited offer' }
   ];
 
   let result = '';
+  const foundImprovements = [];
+  
   for (const improvement of improvements) {
-    if (taggedContent.toLowerCase().includes(improvement.original.toLowerCase())) {
+    // Use case-insensitive search
+    const regex = new RegExp(improvement.original, 'gi');
+    if (regex.test(taggedContent)) {
+      foundImprovements.push(improvement);
       result += `<old_draft>${improvement.original}</old_draft><optimized_draft>${improvement.improved}</optimized_draft>\n`;
+    }
+  }
+
+  console.log(`🔧 Found ${foundImprovements.length} improvements:`, foundImprovements.map(i => i.original));
+
+  // If no specific word improvements found, look for tagged content and provide generic improvements
+  if (result === '') {
+    const fluffMatches = taggedContent.match(/<fluff>(.*?)<\/fluff>/g);
+    const spamMatches = taggedContent.match(/<spam_words>(.*?)<\/spam_words>/g);
+    const hardToReadMatches = taggedContent.match(/<hard_to_read>(.*?)<\/hard_to_read>/g);
+    
+    if (fluffMatches) {
+      result += `<old_draft>wordy phrases</old_draft><optimized_draft>concise language</optimized_draft>\n`;
+    }
+    if (spamMatches) {
+      result += `<old_draft>promotional language</old_draft><optimized_draft>professional tone</optimized_draft>\n`;
+    }
+    if (hardToReadMatches) {
+      result += `<old_draft>complex sentences</old_draft><optimized_draft>clear, simple sentences</optimized_draft>\n`;
     }
   }
 
   return result || '<old_draft>No improvements needed</old_draft><optimized_draft>Content is already well-written</optimized_draft>';
 };
-
-// Import GroqGemma content tagger and Gemma API service
-import { contentTagger, type ContentAnalysisResult } from './ai-engines/content-tagger.js';
-import { gemmaAPIService, type NewsletterAnalysis } from './ai-engines/gemma-api.js';
 
 // Intelligent caching for analysis results
 interface CacheEntry {
@@ -421,7 +494,7 @@ class AnalysisCache {
     const now = new Date();
     let cleanedCount = 0;
 
-    for (const [key, entry] of this.cache.entries()) {
+    for (const [key, entry] of Array.from(this.cache.entries())) {
       if (now > entry.expiresAt) {
         this.cache.delete(key);
         cleanedCount++;
@@ -451,10 +524,93 @@ setInterval(() => {
   analysisCache.cleanup();
 }, 10 * 60 * 1000);
 
+// Grade My Mail intelligent fallback for GMMeditor failures
+async function gradeMyMailIntelligentFallback(originalText: string): Promise<GMMeditorResponse> {
+  console.log('🔄 Using Grade My Mail intelligent fallback for content improvement');
+  
+  try {
+    // Use Grade My Mail's analysis systems to provide intelligent improvements
+    const [highlightingResult, scoringResult] = await Promise.allSettled([
+      contentTagger.analyzeNewsletter(originalText),
+      gemmaAPIService.analyzeNewsletter(originalText)
+    ]);
+
+    let improvements: string[] = [];
+    let rewrittenText = originalText;
+
+    // Extract improvement suggestions from Grade My Mail analysis
+    if (highlightingResult.status === 'fulfilled') {
+      const analysis = highlightingResult.value;
+      const summary = contentTagger.getAnalysisSummary(analysis);
+      
+      // Generate basic improvements based on rule-based analysis
+      if (summary.issueCounts.high > 0) {
+        improvements.push('Reduced spam-like language and improved clarity');
+        rewrittenText = rewrittenText.replace(/\b(amazing|incredible|fantastic)\b/gi, 'excellent');
+        rewrittenText = rewrittenText.replace(/\b(free|urgent|act now|limited time)\b/gi, (match) => {
+          const replacements: { [key: string]: string } = {
+            'free': 'complimentary',
+            'urgent': 'time-sensitive',
+            'act now': 'take action',
+            'limited time': 'time-limited offer'
+          };
+          return replacements[match.toLowerCase()] || match;
+        });
+      }
+    }
+
+    if (scoringResult.status === 'fulfilled') {
+      const analysis = scoringResult.value;
+      if (analysis.improvements && analysis.improvements.length > 0) {
+        improvements.push(...analysis.improvements.slice(0, 3)); // Take top 3 improvements
+      }
+    }
+
+    // Create simple diff mappings for fallback
+    const mappings = [{
+      type: 'changed' as const,
+      old: originalText,
+      new: rewrittenText,
+      wordDiff: null
+    }];
+
+    return {
+      rewritten: rewrittenText,
+      mappings,
+      metadata: {
+        model: 'grade-my-mail-fallback',
+        processingTime: Date.now(),
+        toneUsed: 'friendly',
+        originalLength: originalText.length,
+        rewrittenLength: rewrittenText.length
+      }
+    };
+  } catch (error) {
+    console.error('Grade My Mail fallback failed:', error);
+    // Last resort: return original text with minimal changes
+    return {
+      rewritten: originalText,
+      mappings: [{
+        type: 'unchanged' as const,
+        old: originalText,
+        new: originalText,
+        wordDiff: null
+      }],
+      metadata: {
+        model: 'fallback-minimal',
+        processingTime: Date.now(),
+        toneUsed: 'friendly',
+        originalLength: originalText.length,
+        rewrittenLength: originalText.length
+      }
+    };
+  }
+}
+
 // API Routes - Using GroqGemma rule-based system
 
 // Unified newsletter analysis endpoint with dual-system approach
-app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: Request, res: Response, next: NextFunction) => {
+app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { content, context } = req.body;
     const startTime = (req as any).startTime || Date.now();
@@ -468,7 +624,8 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: 
       // Update processing time for cached result
       cachedResult.metadata.processingTime = Date.now() - startTime;
       cachedResult.metadata.cached = true;
-      return res.json(cachedResult);
+      res.json(cachedResult);
+      return;
     }
 
     // Run both systems in parallel for optimal performance
@@ -486,7 +643,7 @@ app.post('/api/analyze', aiRateLimit, validateRequest(['content']), async (req: 
     ]);
 
     // Process rule-based highlighting results
-    let analysisResult, summary, ranges;
+    let analysisResult: any, summary: any, ranges: any[] = [];
     if (highlightingResult.status === 'fulfilled') {
       analysisResult = highlightingResult.value;
       summary = contentTagger.getAnalysisSummary(analysisResult);
@@ -617,7 +774,7 @@ app.post('/api/newsletter/score', aiRateLimit, validateRequest(['content']), asy
     );
 
     // Calculate additional metrics
-    const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
+    const wordCount = content.split(/\s+/).filter((word: string) => word.length > 0).length;
     const readingTime = Math.ceil(wordCount / 200); // Average reading speed
 
     res.json({
@@ -645,30 +802,93 @@ app.post('/api/newsletter/score', aiRateLimit, validateRequest(['content']), asy
   }
 });
 
-// Newsletter improvement endpoint
-app.post('/api/newsletter/improve', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
+// GMMeditor newsletter improvement endpoint (replaces old /api/fix)
+app.post('/api/newsletter/improve', aiRateLimit, validateRequest(['originalText']), async (req: Request<{}, {}, GMMeditorRequest>, res: Response, next: NextFunction) => {
   try {
-    const { message } = req.body;
+    const { originalText, toneKey = 'friendly', analysis = {}, suggestions = [], options = {} } = req.body;
+    const startTime = Date.now();
 
-    console.log(`🔧 Improving newsletter content (${message.length} characters) - using temporary mock`);
+    console.log(`🔧 [DEBUG] Improving newsletter content with GMMeditor`);
+    console.log(`📝 [DEBUG] Original text length: ${originalText.length} characters`);
+    console.log(`🎨 [DEBUG] Tone: ${toneKey}`);
+    console.log(`📊 [DEBUG] Analysis data:`, analysis);
+    console.log(`💡 [DEBUG] Suggestions:`, suggestions);
 
-    const improvements = await withRetry(
-      () => mockFixEmail(message),
-      { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
-    );
+    try {
+      // Use GMMeditor's rewriteWithLlama31 function
+      console.log(`🚀 [DEBUG] Calling rewriteWithLlama31...`);
+      const result = await withRetry(
+        async () => rewriteWithLlama31({
+          originalText,
+          analysis,
+          suggestions,
+          toneKey,
+          options: {
+            model: 'llama-3.1-8b-instant',
+            temperature: 0.65,
+            maxTokens: 1200,
+            targetGradeLow: 6,
+            targetGradeHigh: 9,
+            ...options
+          }
+        }),
+        { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 2 }
+      );
 
+      const processingTime = Date.now() - startTime;
+
+      const response: GMMeditorResponse = {
+        rewritten: result.rewritten,
+        mappings: result.mappings,
+        metadata: {
+          model: 'llama-3.1-8b-instant',
+          processingTime,
+          toneUsed: toneKey,
+          originalLength: originalText.length,
+          rewrittenLength: result.rewritten.length
+        }
+      };
+
+      console.log(`✅ [DEBUG] GMMeditor improvement completed in ${processingTime}ms`);
+      console.log(`📤 [DEBUG] Sending response:`, {
+        rewrittenLength: response.rewritten.length,
+        mappingsCount: response.mappings.length,
+        metadata: response.metadata
+      });
+      res.json(response);
+
+    } catch (gmmError) {
+      console.warn('⚠️ GMMeditor failed, using Grade My Mail intelligent fallback:', gmmError);
+      
+      // Fallback to Grade My Mail's intelligent analysis (not mock)
+      const fallbackResult = await gradeMyMailIntelligentFallback(originalText);
+      fallbackResult.metadata.processingTime = Date.now() - startTime;
+      
+      res.json(fallbackResult);
+    }
+
+  } catch (error) {
+    console.error('❌ Newsletter improvement failed:', error);
+    next(error);
+  }
+});
+
+// GMMeditor tone options endpoint
+app.get('/api/newsletter/tones', generalRateLimit, (req: Request, res: Response) => {
+  try {
+    const toneOptions = getToneOptions();
     res.json({
-      message: {
-        content: improvements
-      },
+      tones: toneOptions,
+      default: 'friendly',
       metadata: {
-        model: 'mock',
-        timestamp: new Date().toISOString(),
-        note: 'Using temporary mock - will be replaced with GroqGemma system'
+        timestamp: new Date().toISOString()
       }
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({
+      error: 'Failed to retrieve tone options',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 
@@ -694,26 +914,7 @@ app.post('/api/analyze-legacy', aiRateLimit, validateRequest(['message']), async
   }
 });
 
-app.post('/api/fix', aiRateLimit, validateRequest(['message']), async (req: Request<{}, {}, FixRequest>, res: Response, next: NextFunction) => {
-  try {
-    const { message } = req.body;
 
-    console.log(`🔧 Fixing tagged content (${message.length} characters) - using temporary mock`);
-
-    const improvements = await withRetry(
-      () => mockFixEmail(message),
-      { ...RETRY_CONFIGS.AI_MODEL, maxRetries: 1 }
-    );
-
-    res.json({
-      message: {
-        content: improvements
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // Data storage endpoints
 app.post('/api/store', validateRequest(['payload']), async (req: Request<{}, {}, StoreRequest>, res: Response, next: NextFunction) => {
@@ -750,7 +951,7 @@ app.get('/api/load', async (req: Request, res: Response, next: NextFunction) => 
     }
 
     console.log(`📤 Retrieved data with ID: ${id}`);
-    res.json(storedData);
+    res.json({ payload: storedData });
   } catch (error) {
     next(error);
   }
@@ -842,8 +1043,9 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Frontend should connect to: http://localhost:${PORT}`);
-  console.log(`⚠️  Using temporary mock AI - GroqGemma system will be implemented next`);
+  console.log(`🔗 API server available at: http://localhost:${PORT}`);
+  console.log(`🌐 Frontend should be running on: http://localhost:5173`);
+  console.log(`🔧 GMMeditor system active with Grade My Mail fallback`);
 });
 
 // Graceful shutdown

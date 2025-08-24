@@ -124,7 +124,7 @@
   - Add seamless model switching without user disruption
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3_
 
-- [ ] 7. Build clean comparison view for newsletter improvements
+- [x] 7. Build clean comparison view for newsletter improvements
   - Enhance existing VirtualizedDiffViewer with minimal side-by-side layout
   - Implement clean typography and subtle change indicators
   - Add simple copy functionality for improved content
@@ -193,38 +193,122 @@
   - Create clean logging and debugging capabilities
   - _Requirements: 2.4, 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 8. Add sample content and onboarding experience
+- [ ] 8. Remove old mock Fix My Mail system completely
+  - Delete mockFixEmail function from server/index.ts
+  - Remove old /api/fix endpoint that uses mock improvements
+  - Clean up any references to the old mock-based system in frontend
+  - Update error handling to never fallback to mock system
+  - _Requirements: 17.1, 17.2, 17.3, 17.5_
+
+- [x] 8.1. Set up GMMeditor files and dependencies
+  - Copy GMMeditor files (rewriteWithLlama31.js, diffMap.js, editorSystemPrompt.js) to appropriate locations
+  - Install groq-sdk dependency for Llama 3.1 API access
+  - Set up GROQ_API_KEY environment variable configuration
+  - Create TypeScript type definitions for GMMeditor functions
+  - _Requirements: 11.1, 12.1_
+
+- [x] 8.2. Create GMMeditor service integration layer
+  - Create src/services/gmmeditor.ts service wrapper
+  - Implement rewriteContent function that calls rewriteWithLlama31
+  - Add getToneOptions function using GMMeditor TONES constant
+  - Create proper TypeScript interfaces for GMMeditorRequest and GMMeditorResponse
+  - Add error handling and Groq API health checking
+  - _Requirements: 11.1, 11.2, 12.1, 12.2_
+
+- [x] 8.3. Create new backend endpoint for GMMeditor improvements
+  - Replace old /api/fix with new /api/newsletter/improve endpoint
+  - Implement backend integration with rewriteWithLlama31 function
+  - Add support for tone selection, analysis data, and custom options
+  - Create proper request/response handling with mapDrafts integration
+  - Add comprehensive error handling with Grade My Mail fallback (not mock)
+  - _Requirements: 11.1, 11.4, 12.2, 15.1, 15.2_
+
+- [x] 9. Create tone selector component for Fix My Mail
+  - Design clean dropdown component matching Grade My Mail styling
+  - Implement tone selection with GMMeditor TONES options (Professional, Friendly, Persuasive, Analytical, Storytelling)
+  - Add proper TypeScript interfaces and props
+  - Apply Apple-inspired styling consistent with existing components
+  - Add smooth transitions and hover effects
+  - _Requirements: 12.1, 12.5_
+
+- [x] 9.1. Enhance VirtualizedDiffViewer for GMMeditor integration
+  - Integrate mapDrafts functionality with existing diff viewer
+  - Add support for word-level highlighting using wordDiff data
+  - Implement display of unchanged, changed, inserted, and deleted content types
+  - Maintain existing clean styling while adding new diff capabilities
+  - Add proper TypeScript interfaces for DiffMapping data
+  - _Requirements: 14.2, 14.3, 14.4, 14.5, 16.3_
+
+- [x] 10. Completely rebuild Fix My Mail page with GMMeditor
+  - Remove all existing Fix My Mail implementation
+  - Create new FixMyMail.tsx with tone selector and enhanced diff viewer
+  - Implement GMMeditor service integration for content improvement
+  - Add loading states using MinimalPulsePopup from Grade My Mail
+  - Maintain Apple-like design consistency with Grade My Mail
+  - _Requirements: 11.1, 11.2, 11.5, 15.5_
+
+- [x] 10.1. Implement metrics display for Fix My Mail improvements
+  - Create before/after metrics comparison using Grade My Mail's MetricsDisplay component
+  - Show readability grade improvements and other quality metrics
+  - Display processing metadata (model used, processing time, tone applied)
+  - Maintain clean, minimal aesthetic consistent with overall application
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
+
+- [ ] 10.2. Add comprehensive error handling for GMMeditor system
+  - Implement Groq API failure handling with Grade My Mail intelligent fallback
+  - Add progress indicators with descriptive messages for different processing stages
+  - Create smooth transitions between loading and results states
+  - Add retry mechanisms and user-friendly error messages
+  - Never fallback to old mock system under any circumstances
+  - _Requirements: 11.4, 15.1, 15.2, 15.3, 15.4, 17.3_
+
+- [ ] 11. Integrate Fix My Mail with Grade My Mail workflow
+  - Ensure seamless navigation from Grade My Mail analysis to Fix My Mail improvements
+  - Pass Grade My Mail analysis data to GMMeditor for enhanced improvements
+  - Maintain data consistency and state management between pages
+  - Add proper loading states during navigation transitions
+  - _Requirements: 11.2, 14.1, 15.5_
+
+- [ ] 11.1. Test GMMeditor highlighting system without pre-tagged content
+  - Verify that GMMeditor can improve any content, not just pre-tagged from Grade My Mail
+  - Test mapDrafts function creates proper diff mappings automatically
+  - Ensure VirtualizedDiffViewer displays improvements correctly
+  - Validate that word-level highlighting works properly with AI-generated changes
+  - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
+
+- [ ] 12. Add sample content and onboarding experience
   - Create realistic sample newsletter content for demonstration
   - Implement "Try Sample Newsletter" functionality with automatic analysis
   - Add clear indicators for sample vs. user content
   - Design seamless transition from sample to user input
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 9. Implement keyboard shortcuts and efficient workflows
+- [ ] 13. Implement keyboard shortcuts and efficient workflows
   - Add standard macOS keyboard shortcuts (Cmd+A, Cmd+C, Cmd+V)
   - Implement Cmd+Enter for triggering analysis
   - Add Cmd+Shift+C for copying improved content
   - Create subtle visual feedback for keyboard interactions
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 10. Add comprehensive error handling and offline functionality
+- [ ] 14. Add comprehensive error handling and offline functionality
   - Implement graceful error handling that never loses user content
   - Create clear error messages with actionable troubleshooting steps
   - Add automatic content recovery and state preservation
   - Ensure system works reliably with local models offline
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-
-- [ ] 12. Optimize performance and implement production-grade features
+- [ ] 15. Optimize performance and implement production-grade features
   - Add response caching for identical newsletter content
   - Implement connection pooling and model warm-up strategies
   - Create monitoring dashboard for model health and performance
   - Add load balancing for multiple local model instances
+  - Add Groq API monitoring and health checks
   - _Requirements: 2.4, 9.4_
 
-- [ ] 13. Polish UI/UX and conduct final testing
+- [ ] 16. Polish UI/UX and conduct final testing
   - Conduct comprehensive cross-browser and mobile testing
   - Implement accessibility features for screen readers and keyboard navigation
   - Add final UI polish with smooth transitions and micro-interactions
   - Create comprehensive test suite covering all user workflows
+  - Test end-to-end workflow from Grade My Mail to Fix My Mail
   - _Requirements: 4.5, 8.4, 8.5_

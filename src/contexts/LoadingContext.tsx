@@ -1,18 +1,13 @@
-import React, { createContext, useContext } from 'react';
-import type { ReactNode } from 'react';
-import { useLoadingState } from '../hooks/useLoadingState';
-import type { LoadingType } from '../hooks/useLoadingState';
+import React, { createContext, useContext, ReactNode } from 'react';
+import { useLoadingState, type LoadingType } from '../hooks/useLoadingState';
 import { LoadingScreen } from '../components/LoadingScreen/LoadingScreen';
-import { AnalysisLoadingScreen } from '../components/LoadingScreen/AnalysisLoadingScreen';
 
 interface LoadingContextType {
   startLoading: (type: LoadingType, message?: string) => void;
-  startAnalysisLoading: (analysisType: 'grading' | 'fixing' | 'processing', currentStep?: string) => void;
   updateProgress: (progress: number) => void;
-  setMessage: (message: string) => void;
   stopLoading: () => void;
+  setMessage: (message: string) => void;
   simulateProgress: (duration?: number) => void;
-  isLoading: boolean;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -26,66 +21,29 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
     loadingState,
     startLoading,
     updateProgress,
-    setMessage,
     stopLoading,
-    simulateProgress
+    setMessage,
+    simulateProgress,
   } = useLoadingState();
-
-  const [analysisState, setAnalysisState] = React.useState<{
-    isVisible: boolean;
-    type: 'grading' | 'fixing' | 'processing';
-    currentStep?: string;
-  }>({
-    isVisible: false,
-    type: 'processing'
-  });
-
-  const startAnalysisLoading = React.useCallback((
-    analysisType: 'grading' | 'fixing' | 'processing',
-    currentStep?: string
-  ) => {
-    setAnalysisState({
-      isVisible: true,
-      type: analysisType,
-      currentStep
-    });
-    startLoading('analysis');
-  }, [startLoading]);
-
-  const handleStopLoading = React.useCallback(() => {
-    stopLoading();
-    setAnalysisState(prev => ({ ...prev, isVisible: false }));
-  }, [stopLoading]);
 
   const contextValue: LoadingContextType = {
     startLoading,
-    startAnalysisLoading,
     updateProgress,
+    stopLoading,
     setMessage,
-    stopLoading: handleStopLoading,
     simulateProgress,
-    isLoading: loadingState.isLoading
   };
 
   return (
     <LoadingContext.Provider value={contextValue}>
       {children}
       
-      {/* General Loading Screen */}
       <LoadingScreen
-        isVisible={loadingState.isLoading && !analysisState.isVisible}
+        isVisible={loadingState.isLoading}
         type={loadingState.type}
+        message={loadingState.message}
         progress={loadingState.progress}
-        onComplete={handleStopLoading}
-      />
-
-      {/* Analysis Loading Screen */}
-      <AnalysisLoadingScreen
-        isVisible={analysisState.isVisible}
-        analysisType={analysisState.type}
-        progress={loadingState.progress}
-        currentStep={analysisState.currentStep}
-        onComplete={handleStopLoading}
+        onComplete={stopLoading}
       />
     </LoadingContext.Provider>
   );

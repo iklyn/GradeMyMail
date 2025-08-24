@@ -186,13 +186,13 @@ const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
             </p>
 
             {/* Suggestions */}
-            {error.suggestions.length > 0 && (
+            {error.suggestions && error.suggestions.length > 0 && (
               <div className="mt-3">
                 <button
                   onClick={() => setShowSuggestions(!showSuggestions)}
                   className={`text-xs ${styles.button} px-2 py-1 rounded transition-colors`}
                 >
-                  {showSuggestions ? 'Hide' : 'Show'} Suggestions ({error.suggestions.length})
+                  {showSuggestions ? 'Hide' : 'Show'} Suggestions ({error.suggestions?.length || 0})
                 </button>
                 
                 {showSuggestions && (

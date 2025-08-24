@@ -40,7 +40,11 @@ export class NavigationManager {
         throw new Error('Invalid email data: missing required fields');
       }
 
-      updateState({ progress: 30 });
+      updateState({ progress: 25 });
+
+      // Add a small delay to show the "Securing data transfer" step
+      await new Promise(resolve => setTimeout(resolve, 300));
+      updateState({ progress: 40 });
 
       // Store data using parallel storage strategy
       const storeResult = await StateTransferManager.storeEmailData(emailData);
@@ -49,7 +53,11 @@ export class NavigationManager {
         throw new Error(storeResult.error || 'Failed to store email data');
       }
 
-      updateState({ progress: 70 });
+      updateState({ progress: 65 });
+
+      // Add another small delay to show the "Initializing AI models" step
+      await new Promise(resolve => setTimeout(resolve, 200));
+      updateState({ progress: 80 });
 
       // Navigate with the data ID
       navigate(`/fixmymail/${storeResult.id}`, {
