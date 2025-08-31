@@ -16,6 +16,8 @@ import { AnalysisInsights } from '../components/AnalysisInsights';
 import { ContextPanel, type NewsletterContext } from '../components/ContextPanel';
 import { calculateNewsletterMetrics } from '../utils/metricsCalculator';
 import { apiService } from '../services/api';
+import ToneSelector from '../components/ToneSelector';
+import type { ToneKey } from '../types/gmmeditor';
 
 
 
@@ -49,6 +51,7 @@ const GradeMyMail: React.FC = () => {
     usingFallback: false,
     lastChecked: null,
   });
+  const [selectedTone, setSelectedTone] = useState<ToneKey | null>(null);
 
   // Container ref for the editor
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -394,6 +397,7 @@ John`;
         metadata: {
           wordCount: content.split(/\s+/).filter(word => word.length > 0).length,
           emailType: 'general',
+          tone: selectedTone || undefined, // Pass the selected tone, or undefined to preserve original tone
         },
       };
 

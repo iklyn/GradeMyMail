@@ -172,7 +172,7 @@ const defaultRetryConfig: RetryConfig = {
 class RequestCancellationManager {
   private controllers = new Map<string, AbortController>();
   private lastRequestTimes = new Map<string, number>();
-  private readonly MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+  private readonly MIN_REQUEST_INTERVAL = 500; // 0.5 seconds between requests (reduced from 2 seconds)
 
   createController(key: string): AbortController {
     // Check rate limiting

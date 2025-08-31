@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { NavigationManager, type NavigationState } from '../utils/navigationUtils';
 import { type EmailData } from '../utils/stateTransfer';
 import VirtualizedDiffViewer from '../components/VirtualizedDiff/VirtualizedDiffViewer';
-import ToneSelector from '../components/ToneSelector/ToneSelector';
+import { TONES } from '../types/gmmeditor';
 import { FixMyMailMetrics } from '../components/MetricsDisplay';
 import type { NewsletterMetrics } from '../components/MetricsDisplay';
 
@@ -13,12 +13,80 @@ import { StatePreservation } from '../utils/errorRecovery';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
 import { useLoading } from '../contexts/LoadingContext';
+import { cleanHtmlForDisplay } from '../utils/sanitization';
 
 import Logo from '../components/ui/Logo';
 import ThemeResponsiveLogo from '../components/ui/ThemeResponsiveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 import type { ToneKey } from '../types/gmmeditor';
 import './FixMyMail.css';
+
+// Tone Change Button Component
+interface ToneChangeButtonProps {
+  selectedTone: ToneKey;
+  onToneChange: (tone: ToneKey) => void;
+  disabled?: boolean;
+}
+
+const ToneChangeButton: React.FC<ToneChangeButtonProps> = ({ selectedTone, onToneChange, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const toneOptions = Object.entries(TONES).map(([key, label]) => ({
+    key: key as ToneKey,
+    label
+  }));
+
+  const handleToneSelect = (toneKey: ToneKey) => {
+    onToneChange(toneKey);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={disabled}
+        className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none disabled:shadow-md"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-10 0a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2M9 10h6m-6 4h6" />
+        </svg>
+{selectedTone ? TONES[selectedTone] : 'Change how it sounds'}
+        <svg className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#2C2C2E] border border-[#d1d1d6] dark:border-white/10 rounded-xl shadow-xl z-50 min-w-[280px] overflow-hidden">
+          <div className="p-2">
+            <div className="text-sm font-medium text-[#6d6d70] dark:text-[#EBEBF5] px-3 py-2 border-b border-[#e5e5ea] dark:border-white/10">
+              Choose writing style:
+            </div>
+            {toneOptions.map((option) => (
+              <button
+                key={option.key}
+                onClick={() => handleToneSelect(option.key)}
+                className={`w-full text-left px-3 py-3 rounded-lg transition-colors duration-150 flex items-center justify-between ${
+                  option.key === selectedTone
+                    ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
+                    : 'hover:bg-gray-50 dark:hover:bg-white/5 text-[#1d1d1f] dark:text-[#FFFFFF]'
+                }`}
+              >
+                <span className="font-medium">{option.label}</span>
+                {option.key === selectedTone && (
+                  <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface FixMyMailState {
   emailData: EmailData | null;
@@ -113,7 +181,7 @@ const FixMyMail: React.FC = () => {
     isLoading: true,
     error: null,
     loadingProgress: 0,
-    selectedTone: 'friendly',
+    selectedTone: null, // No tone selected initially
     isRegenerating: false,
   });
 
@@ -212,7 +280,13 @@ const FixMyMail: React.FC = () => {
           metrics: originalMetrics
         });
         
-        setState(prev => ({ ...prev, emailData, originalMetrics, loadingProgress: 60 }));
+        setState(prev => ({ 
+          ...prev, 
+          emailData, 
+          originalMetrics, 
+          loadingProgress: 60,
+          selectedTone: emailData.metadata?.tone as ToneKey || null // Set tone from metadata
+        }));
 
         console.log('🔧 [DEBUG] Starting content improvement generation...');
         // Generate improved content
@@ -402,8 +476,11 @@ const FixMyMail: React.FC = () => {
       console.log('🔧 [DEBUG] Calling apiService.fixEmail...');
       console.log('📝 [DEBUG] Tagged content preview:', emailData.taggedContent.substring(0, 200) + '...');
       
-      // Call the fix API with the full tagged content (not just extracted sentences)
-      const result = await apiService.fixEmail(emailData.taggedContent);
+      // Call the fix API with the full tagged content and selected tone
+      // If no tone is selected, pass undefined to preserve original tone
+      const result = await apiService.fixEmail(emailData.taggedContent, {
+        tone: state.selectedTone || undefined
+      });
       
       console.log('✅ [DEBUG] API call completed successfully');
       console.log('📤 [DEBUG] API response structure:', {
@@ -754,32 +831,7 @@ const FixMyMail: React.FC = () => {
     );
   }
 
-  // Helper function to clean HTML tags and analysis tags while preserving formatting
-  const cleanHtmlTags = (html: string): string => {
-    return html
-      // Remove analysis tags first (fluff, spam_words, hard_to_read)
-      .replace(/<(fluff|spam_words|hard_to_read)>/gi, '')
-      .replace(/<\/(fluff|spam_words|hard_to_read)>/gi, '')
-      // Convert block elements to line breaks
-      .replace(/<\/?(p|div|h[1-6]|li|blockquote)[^>]*>/gi, '\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/?(ul|ol)[^>]*>/gi, '\n')
-      // Remove remaining HTML tags
-      .replace(/<[^>]*>/g, '')
-      // Clean up HTML entities
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      // Clean up excessive whitespace while preserving intentional line breaks
-      .replace(/\n\s*\n\s*\n/g, '\n\n') // Max 2 consecutive line breaks
-      .replace(/[ \t]+/g, ' ') // Multiple spaces/tabs to single space
-      .replace(/\n /g, '\n') // Remove spaces at start of lines
-      .replace(/ \n/g, '\n') // Remove spaces at end of lines
-      .trim();
-  };
+
 
   // Main FixMyMail interface - Clean Apple-inspired design matching GradeMyMail
   return (
@@ -834,48 +886,60 @@ const FixMyMail: React.FC = () => {
         <div className="max-w-6xl mx-auto px-6 pb-16">
           {state.emailData && state.improvedContent && (
             <div className="space-y-6">
-              {/* Tone Selector Controls */}
-              <div className="bg-white dark:bg-[#2C2C2E] border border-[#d1d1d6] dark:border-white/5 rounded-xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] p-6 transition-all duration-400 hover:shadow-md dark:hover:shadow-[0_6px_24px_rgba(0,0,0,0.5)] animate-fade-in-up">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 max-w-xs">
-                    <ToneSelector
-                      selectedTone={state.selectedTone}
-                      onToneChange={handleToneChange}
-                      disabled={state.isRegenerating}
-                      className="w-full"
-                    />
+              {/* Tone Change Button */}
+              <div className="mb-6 flex justify-center">
+                <ToneChangeButton
+                  selectedTone={state.selectedTone}
+                  onToneChange={handleToneChange}
+                  disabled={state.isRegenerating}
+                />
+                {state.isRegenerating && (
+                  <div className="ml-4 flex items-center text-sm text-[#6d6d70] dark:text-[#EBEBF5]">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#1d1d1f] dark:border-[#03FF40] border-t-transparent mr-2"></div>
+                    Regenerating...
                   </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    {state.isRegenerating && (
-                      <div className="flex items-center text-sm text-[#6d6d70] dark:text-[#EBEBF5]">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#007aff] dark:border-[#0a84ff] mr-2"></div>
-                        Regenerating...
-                      </div>
-                    )}
-                    
-                    <div className="text-sm text-[#6d6d70] dark:text-[#EBEBF5]">
-                      {state.gmmEditorData?.mappings ? 
-                        `${state.gmmEditorData.mappings.filter(m => m.type === 'changed' || m.type === 'inserted').length} improvements applied` : 
-                        'Content improved'
-                      }
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Diff Viewer */}
               <div className="bg-white dark:bg-[#2C2C2E] border border-[#d1d1d6] dark:border-white/5 rounded-xl shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden transition-all duration-400 hover:shadow-md dark:hover:shadow-[0_6px_24px_rgba(0,0,0,0.5)] hover:-translate-y-1 animate-fade-in-up">
                 <VirtualizedDiffViewer
                   originalContent={(() => {
-                    const cleaned = cleanHtmlTags(state.emailData.originalText);
-                    console.log('🔍 [DEBUG] Original content after cleaning:', {
-                      raw: state.emailData.originalText.substring(0, 200),
-                      cleaned: cleaned.substring(0, 200),
-                      hasTags: /<(fluff|spam_words|hard_to_read)>/.test(state.emailData.originalText),
-                      hasTagsAfterCleaning: /<(fluff|spam_words|hard_to_read)>/.test(cleaned)
-                    });
-                    return cleaned;
+                    try {
+                      // Prioritize originalHTML if available, otherwise use originalText
+                      let sourceContent = state.emailData.originalHTML || state.emailData.originalText;
+                      
+                      // Validate source content
+                      if (!sourceContent || typeof sourceContent !== 'string') {
+                        console.warn('🔍 [DEBUG] Invalid source content detected', {
+                          hasOriginalHTML: !!state.emailData.originalHTML,
+                          hasOriginalText: !!state.emailData.originalText,
+                          sourceContentType: typeof sourceContent
+                        });
+                        return 'No valid content available to display';
+                      }
+                      
+                      // Clean the content to remove HTML tags and analysis tags using centralized function
+                      const cleanedContent = cleanHtmlForDisplay(sourceContent);
+                      
+                      console.log('🔍 [DEBUG] Original content processing:', {
+                        hasOriginalHTML: !!state.emailData.originalHTML,
+                        sourceContentLength: sourceContent.length,
+                        sourceContentPreview: sourceContent.substring(0, 200) + '...',
+                        cleanedContentLength: cleanedContent.length,
+                        cleanedPreview: cleanedContent.substring(0, 200) + '...',
+                        hasHtmlTagsInSource: /<[^>]*>/.test(sourceContent),
+                        hasHtmlTagsAfterCleaning: /<[^>]*>/.test(cleanedContent),
+                        hasAnalysisTagsInSource: /<(fluff|spam_words|hard_to_read)>/.test(sourceContent)
+                      });
+                      
+                      // Fallback to a message if content is empty after cleaning
+                      return cleanedContent || 'Content processed but appears to be empty';
+                      
+                    } catch (error) {
+                      console.error('🔍 [DEBUG] Error processing original content:', error);
+                      return 'Error processing content for display';
+                    }
                   })()}
                   modifiedContent={state.improvedContent}
                   gmmEditorData={state.gmmEditorData}
@@ -939,27 +1003,13 @@ const FixMyMail: React.FC = () => {
                     
                     {/* Show analysis status */}
                     {state.isAnalyzingImprovedContent && (
-                      <div className="mt-4 flex items-center justify-center text-sm text-[#6d6d70] dark:text-[#EBEBF5]">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#FF9500] mr-2"></div>
-                        Analyzing improved content for real metrics...
+                      <div className="mt-6 flex items-center justify-center text-base text-[#6d6d70] dark:text-[#EBEBF5] bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent mr-3"></div>
+                        Analyzing improved content...
                       </div>
                     )}
                     
-                    {/* Debug info - remove this in production */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="mt-4 p-3 bg-gray-100 dark:bg-[#3A3A3C] rounded-lg text-xs">
-                        <div className="font-medium mb-2">Debug Info:</div>
-                        <div>Has improved content: {!!state.improvedContent ? 'Yes' : 'No'}</div>
-                        <div>Has real improved metrics: {!!state.improvedMetrics ? 'Yes' : 'No'}</div>
-                        <div>Is analyzing: {state.isAnalyzingImprovedContent ? 'Yes' : 'No'}</div>
-                        <div>Content length: {state.improvedContent?.length || 0}</div>
-                        {!state.improvedMetrics && state.improvedContent && (
-                          <div className="text-red-600 dark:text-red-400 mt-1">
-                            ⚠️ Analysis failed - check browser console for details
-                          </div>
-                        )}
-                      </div>
-                    )}
+
                   </div>
                 </div>
               )}

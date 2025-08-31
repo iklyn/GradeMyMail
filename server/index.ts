@@ -209,10 +209,15 @@ const createRateLimit = (windowMs: number, max: number, message: string) => {
     });
 
     if (current.count > max) {
+      const retryAfterSeconds = Math.ceil((current.resetTime - now) / 1000);
       res.status(429).json({
         error: 'Too many requests',
         message,
-        retryAfter: Math.ceil((current.resetTime - now) / 1000),
+        retryAfter: retryAfterSeconds,
+        currentCount: current.count,
+        maxAllowed: max,
+        windowMs: windowMs,
+        resetTime: new Date(current.resetTime).toISOString(),
       });
       return;
     }
@@ -228,9 +233,13 @@ const generalRateLimit = createRateLimit(
   'Too many requests from this IP, please try again later.'
 );
 
+// Configurable rate limits based on environment
+const AI_RATE_LIMIT_WINDOW = parseInt(process.env.AI_RATE_LIMIT_WINDOW || '300000'); // 5 minutes default
+const AI_RATE_LIMIT_MAX = parseInt(process.env.AI_RATE_LIMIT_MAX || '100'); // 100 requests default
+
 const aiRateLimit = createRateLimit(
-  5 * 60 * 1000, // 5 minutes
-  20, // 20 AI requests per window
+  AI_RATE_LIMIT_WINDOW,
+  AI_RATE_LIMIT_MAX,
   'Too many AI analysis requests, please try again in a few minutes.'
 );
 
