@@ -1,45 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GradeMyMail</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-
-  <!-- Top Bar with FixMyMail Button -->
-  <div id="topBar">
-    <div id="fixMyMailButton" style="display: none;">
-      <img src="ConstructionHammer.gif" alt="Fix Icon" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;">
-      <span style="vertical-align: middle;">FixMyMail</span>
-    </div>
-  </div>
-
-  <h1>GradeMyMail</h1>
-  <p>Instant feedback to make your newsletter stand out.</p>
-
-  <!-- Editable input area -->
-  <div id="inputArea" contenteditable="true" data-placeholder="type something, what are you waiting for?"></div>
-  
-  <!-- Hidden analyze button (optional if you want automatic analysis later) -->
-  <button id="analyzeButton" style="display: none;">Analyze</button>
-
-  <div id="legend">
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #4DDDDF; border-radius: 50%;"></div>
-      <span>Fluff</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #FEE404; border-radius: 50%;"></div>
-      <span>Spam Words</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <div style="width: 14px; height: 14px; background-color: #FF3232; border-radius: 50%;"></div>
-      <span>Hard to Read</span>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React + TS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
